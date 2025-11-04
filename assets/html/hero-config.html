@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>英雄配置（导入/导出 JSON）</title>
+  <style>
+    :root {
+      --bg: #0f1318;
+      --panel: #171e26;
+      --muted: #76808f;
+      --text: #e6eef8;
+      --accent: #3aa0ff;
+      --accent-2: #7c4dff;
+      --border: #243041;
+      --danger: #ff4d4f;
+      --ok: #52c41a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Microsoft YaHei", "Noto Sans SC", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(90deg, rgba(58,160,255,.15), rgba(124,77,255,.15));
+    }
+    header h1 { margin: 0; font-size: 20px; }
+    .container { padding: 20px; max-width: 1200px; margin: 0 auto; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+    }
+    .panel h2 { margin: 0 0 12px; font-size: 16px; }
+    .row { display: grid; grid-template-columns: 160px 1fr; align-items: center; gap: 10px; margin-bottom: 10px; }
+    label { color: var(--muted); font-size: 13px; }
+    input[type="text"], input[type="number"] {
+      width: 100%;
+      background: #0c1116;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      outline: none;
+    }
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .attrs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .attr-panel { border: 1px dashed var(--border); border-radius: 8px; padding: 10px; }
+    .attr-panel h3 { margin: 0 0 10px; font-size: 14px; color: var(--muted); }
+    .growth-grid { display: grid; grid-template-columns: 60px 130px 1fr 130px 1fr; gap: 10px; align-items: center; }
+    .growth-grid .name { color: var(--text); }
+    .btns { display: flex; gap: 10px; flex-wrap: wrap; }
+    button {
+      background: var(--accent);
+      border: none;
+      color: white;
+      padding: 10px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button.secondary { background: #273244; color: #c7d2e5; }
+    button.warning { background: var(--danger); }
+    button.success { background: var(--ok); color: #0f2a14; }
+    .note { color: var(--muted); font-size: 12px; }
+    .preview { margin-top: 10px; font-size: 13px; color: #c7d2e5; }
+    textarea {
+      width: 100%; min-height: 160px; resize: vertical;
+      background: #0c1116; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+    }
+    .section-title { display:flex; align-items:center; justify-content:space-between; margin:0 0 10px; }
+    .section-title h2 { margin:0; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>英雄配置（导入/导出 JSON）</h1>
+  </header>
+  <div class="container">
+    <div class="grid">
+      <section class="panel">
+        <div class="section-title">
+          <h2>基础信息</h2>
+          <span class="note">填写英雄名字与基础/战斗属性</span>
+        </div>
+        <div class="row">
+          <label for="heroName">英雄名字</label>
+          <input id="heroName" type="text" placeholder="例如：艾希" />
+        </div>
+        <div class="attrs">
+          <div class="attr-panel" id="basicPanel">
+            <h3>基础属性</h3>
+            <div id="basicAttrs"></div>
+          </div>
+          <div class="attr-panel" id="combatPanel">
+            <h3>战斗属性</h3>
+            <div id="combatAttrs"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-title">
+          <h2>成长配置</h2>
+          <span class="note">勾选“每级/每10级变化”并设置增量</span>
+        </div>
+        <div class="growth-grid" id="growthGrid">
+          <div class="name"><strong>属性</strong></div>
+          <label>每级变化</label>
+          <div></div>
+          <label>每10级变化</label>
+          <div></div>
+          <!-- 动态插入属性行 -->
+        </div>
+        <div class="row" style="margin-top:12px; grid-template-columns: 160px 1fr;">
+          <label for="previewLevel">预览等级</label>
+          <input id="previewLevel" type="number" min="1" step="1" value="1" />
+        </div>
+        <div class="preview" id="previewOutput">在此预览指定等级下的属性值</div>
+      </section>
+    </div>
+
+    <section class="panel" style="margin-top:16px;">
+      <div class="section-title">
+        <h2>导入 / 导出</h2>
+        <span class="note">支持从文件或粘贴框导入；导出可下载为 .json</span>
+      </div>
+      <div class="btns" style="margin-bottom:10px;">
+        <input type="file" id="importFile" accept="application/json" />
+        <button class="secondary" id="btnImportFile">从文件导入</button>
+        <button class="secondary" id="btnImportText">从粘贴框导入</button>
+        <button id="btnExport">导出 JSON（下载）</button>
+        <button class="success" id="btnCopy">复制导出内容到剪贴板</button>
+        <button class="warning" id="btnReset">清空表单</button>
+      </div>
+      <textarea id="exportText" placeholder="导出/粘贴 JSON 内容"></textarea>
+    </section>
+  </div>
+
+  <script>
+    // 属性定义（与战斗系统文档一致）
+    const BASIC_ATTRS = [
+      '攻击力', '攻击加成', '法强加成', '护甲', '魔抗', '攻击距离'
+    ];
+    const COMBAT_ATTRS = [
+      '攻速', '暴击率', '暴击倍率', '吸血', '增伤', '减伤', '法力回复'
+    ];
+
+    // 构建输入行
+    function buildAttrInputs(containerId, names) {
+      const container = document.getElementById(containerId);
+      names.forEach(name => {
+        const row = document.createElement('div');
+        row.className = 'row';
+        const label = document.createElement('label');
+        label.textContent = name;
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.step = 'any';
+        input.placeholder = '0';
+        input.id = `attr-${name}`;
+        row.appendChild(label);
+        row.appendChild(input);
+        container.appendChild(row);
+      });
+    }
+
+    // 构建成长配置行
+    function buildGrowthRows() {
+      const grid = document.getElementById('growthGrid');
+      const allAttrs = [...BASIC_ATTRS, ...COMBAT_ATTRS];
+      allAttrs.forEach(name => {
+        const nameEl = document.createElement('div');
+        nameEl.className = 'name';
+        nameEl.textContent = name;
+
+        const plabel = document.createElement('div'); plabel.className = 'note'; plabel.textContent = '启用';
+        const pchk = document.createElement('input'); pchk.type = 'checkbox'; pchk.id = `gl-${name}`;
+        const pval = document.createElement('input'); pval.type = 'number'; pval.step = 'any'; pval.placeholder = '每级增量'; pval.id = `gv-${name}`;
+
+        const tlabel = document.createElement('div'); tlabel.className = 'note'; tlabel.textContent = '启用';
+        const tchk = document.createElement('input'); tchk.type = 'checkbox'; tchk.id = `g10l-${name}`;
+        const tval = document.createElement('input'); tval.type = 'number'; tval.step = 'any'; tval.placeholder = '每10级增量'; tval.id = `g10v-${name}`;
+
+        grid.appendChild(nameEl);
+        grid.appendChild(pchk);
+        grid.appendChild(pval);
+        grid.appendChild(tchk);
+        grid.appendChild(tval);
+      });
+    }
+
+    function getNumber(id) {
+      const el = document.getElementById(id);
+      if (!el) return 0;
+      const v = parseFloat(el.value);
+      return Number.isFinite(v) ? v : 0;
+    }
+
+    function setNumber(id, v) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.value = v ?? '';
+    }
+
+    function getHeroJSON() {
+      const name = document.getElementById('heroName').value.trim();
+      const basic = {};
+      BASIC_ATTRS.forEach(n => basic[n] = getNumber(`attr-${n}`));
+      const combat = {};
+      COMBAT_ATTRS.forEach(n => combat[n] = getNumber(`attr-${n}`));
+
+      const perLevel = {};
+      const per10 = {};
+      [...BASIC_ATTRS, ...COMBAT_ATTRS].forEach(n => {
+        const ckL = document.getElementById(`gl-${n}`).checked;
+        const ck10 = document.getElementById(`g10l-${n}`).checked;
+        const vL = getNumber(`gv-${n}`);
+        const v10 = getNumber(`g10v-${n}`);
+        if (ckL && vL !== 0) perLevel[n] = vL;
+        if (ck10 && v10 !== 0) per10[n] = v10;
+      });
+
+      const json = {
+        '英雄名字': name,
+        '基础属性': basic,
+        '战斗属性': combat,
+        '成长配置': {
+          '每级': perLevel,
+          '每10级': per10
+        }
+      };
+      return json;
+    }
+
+    function fillFromJSON(data) {
+      try {
+        document.getElementById('heroName').value = data['英雄名字'] ?? '';
+        const basic = data['基础属性'] || {};
+        BASIC_ATTRS.forEach(n => setNumber(`attr-${n}`, basic[n] ?? ''));
+        const combat = data['战斗属性'] || {};
+        COMBAT_ATTRS.forEach(n => setNumber(`attr-${n}`, combat[n] ?? ''));
+
+        const growth = data['成长配置'] || {};
+        const perLevel = growth['每级'] || {};
+        const per10 = growth['每10级'] || {};
+        [...BASIC_ATTRS, ...COMBAT_ATTRS].forEach(n => {
+          const vL = perLevel[n];
+          const v10 = per10[n];
+          const ckL = document.getElementById(`gl-${n}`);
+          const ck10 = document.getElementById(`g10l-${n}`);
+          ckL.checked = vL !== undefined;
+          ck10.checked = v10 !== undefined;
+          setNumber(`gv-${n}`, vL ?? '');
+          setNumber(`g10v-${n}`, v10 ?? '');
+        });
+      } catch (e) {
+        alert('导入失败：JSON 格式不符合预期');
+        console.error(e);
+      }
+    }
+
+    function exportJSON() {
+      const json = getHeroJSON();
+      const text = JSON.stringify(json, null, 2);
+      document.getElementById('exportText').value = text;
+      const blob = new Blob([text], { type: 'application/json' });
+      const name = json['英雄名字'] || 'hero';
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${name}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+
+    function importFromText() {
+      const text = document.getElementById('exportText').value.trim();
+      if (!text) { alert('粘贴框为空'); return; }
+      try { const data = JSON.parse(text); fillFromJSON(data); }
+      catch (e) { alert('解析失败：请确认为合法 JSON'); }
+    }
+
+    function importFromFile() {
+      const fileInput = document.getElementById('importFile');
+      const f = fileInput.files && fileInput.files[0];
+      if (!f) { alert('请先选择一个 JSON 文件'); return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        document.getElementById('exportText').value = reader.result;
+        importFromText();
+      };
+      reader.readAsText(f, 'utf-8');
+    }
+
+    function resetForm() {
+      document.getElementById('heroName').value = '';
+      [...BASIC_ATTRS, ...COMBAT_ATTRS].forEach(n => {
+        setNumber(`attr-${n}`, '');
+        document.getElementById(`gl-${n}`).checked = false;
+        document.getElementById(`g10l-${n}`).checked = false;
+        setNumber(`gv-${n}`, '');
+        setNumber(`g10v-${n}`, '');
+      });
+      document.getElementById('exportText').value = '';
+      document.getElementById('previewLevel').value = 1;
+      updatePreview();
+    }
+
+    function copyExportText() {
+      const el = document.getElementById('exportText');
+      if (!el.value.trim()) { exportJSON(); }
+      el.select();
+      document.execCommand('copy');
+      alert('已复制导出内容到剪贴板');
+    }
+
+    function computeAtLevel(level) {
+      const data = getHeroJSON();
+      const resBasic = {};
+      const resCombat = {};
+      const perLevel = data['成长配置']['每级'] || {};
+      const per10 = data['成长配置']['每10级'] || {};
+      const bonus10Times = Math.floor(level / 10);
+      BASIC_ATTRS.forEach(n => {
+        const base = data['基础属性'][n] || 0;
+        const inc = (perLevel[n] || 0) * level + (per10[n] || 0) * bonus10Times;
+        resBasic[n] = base + inc;
+      });
+      COMBAT_ATTRS.forEach(n => {
+        const base = data['战斗属性'][n] || 0;
+        const inc = (perLevel[n] || 0) * level + (per10[n] || 0) * bonus10Times;
+        resCombat[n] = base + inc;
+      });
+      return { 基础属性: resBasic, 战斗属性: resCombat };
+    }
+
+    function updatePreview() {
+      const level = parseInt(document.getElementById('previewLevel').value || '1', 10);
+      const res = computeAtLevel(Math.max(1, level));
+      const lines = [];
+      lines.push(`等级 ${Math.max(1, level)} 预览：`);
+      lines.push('基础属性：');
+      BASIC_ATTRS.forEach(n => lines.push(`  - ${n}: ${res['基础属性'][n]}`));
+      lines.push('战斗属性：');
+      COMBAT_ATTRS.forEach(n => lines.push(`  - ${n}: ${res['战斗属性'][n]}`));
+      document.getElementById('previewOutput').textContent = lines.join('\n');
+    }
+
+    // 初始化
+    buildAttrInputs('basicAttrs', BASIC_ATTRS);
+    buildAttrInputs('combatAttrs', COMBAT_ATTRS);
+    buildGrowthRows();
+
+    // 事件绑定
+    document.getElementById('btnExport').addEventListener('click', exportJSON);
+    document.getElementById('btnImportText').addEventListener('click', importFromText);
+    document.getElementById('btnImportFile').addEventListener('click', importFromFile);
+    document.getElementById('btnReset').addEventListener('click', resetForm);
+    document.getElementById('btnCopy').addEventListener('click', copyExportText);
+    document.getElementById('previewLevel').addEventListener('input', updatePreview);
+    // 各输入变化时也更新预览
+    [...document.querySelectorAll('input')].forEach(el => el.addEventListener('input', updatePreview));
+    updatePreview();
+  </script>
+</body>
+</html>
