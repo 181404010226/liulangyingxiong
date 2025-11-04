@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>英雄配置（导入/导出 JSON）</title>
+  <title>英雄/装备配置（导入/导出 JSON）</title>
   <style>
     :root {
       --bg: #0f1318;
@@ -81,17 +81,24 @@
 </head>
 <body>
   <header>
-    <h1>英雄配置（导入/导出 JSON）</h1>
+    <h1>英雄/装备配置（导入/导出 JSON）</h1>
   </header>
   <div class="container">
     <div class="grid">
       <section class="panel">
         <div class="section-title">
           <h2>基础信息</h2>
-          <span class="note">填写英雄名字与基础/战斗属性</span>
+          <span class="note">填写名字与基础/战斗属性</span>
         </div>
         <div class="row">
-          <label for="heroName">英雄名字</label>
+          <label for="configType">配置类型</label>
+          <select id="configType" style="width:100%; background:#0c1116; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 10px;">
+            <option value="英雄" selected>英雄</option>
+            <option value="装备">装备</option>
+          </select>
+        </div>
+        <div class="row">
+          <label for="heroName">名字</label>
           <input id="heroName" type="text" placeholder="例如：艾希" />
         </div>
         <div class="attrs">
@@ -147,7 +154,7 @@
   <script>
     // 属性定义（与战斗系统文档一致）
     const BASIC_ATTRS = [
-      '攻击力', '攻击加成', '法强加成', '护甲', '魔抗', '攻击距离'
+      '攻击力', '攻击加成', '法强加成', '护甲', '魔抗', '攻击距离', '移速'
     ];
     const COMBAT_ATTRS = [
       '攻速', '暴击率', '暴击倍率', '吸血', '增伤', '减伤', '法力回复'
@@ -212,6 +219,7 @@
 
     function getHeroJSON() {
       const name = document.getElementById('heroName').value.trim();
+      const type = document.getElementById('configType')?.value || '英雄';
       const basic = {};
       BASIC_ATTRS.forEach(n => basic[n] = getNumber(`attr-${n}`));
       const combat = {};
@@ -229,7 +237,8 @@
       });
 
       const json = {
-        '英雄名字': name,
+        '类型': type,
+        '名字': name,
         '基础属性': basic,
         '战斗属性': combat,
         '成长配置': {
@@ -242,7 +251,9 @@
 
     function fillFromJSON(data) {
       try {
-        document.getElementById('heroName').value = data['英雄名字'] ?? '';
+        const typeEl = document.getElementById('configType');
+        if (typeEl) typeEl.value = data['类型'] ?? '英雄';
+        document.getElementById('heroName').value = data['名字'] ?? '';
         const basic = data['基础属性'] || {};
         BASIC_ATTRS.forEach(n => setNumber(`attr-${n}`, basic[n] ?? ''));
         const combat = data['战斗属性'] || {};
@@ -272,7 +283,7 @@
       const text = JSON.stringify(json, null, 2);
       document.getElementById('exportText').value = text;
       const blob = new Blob([text], { type: 'application/json' });
-      const name = json['英雄名字'] || 'hero';
+      const name = json['名字'] || 'hero';
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = `${name}.json`;
@@ -302,6 +313,7 @@
 
     function resetForm() {
       document.getElementById('heroName').value = '';
+      document.getElementById('configType').value = '英雄';
       [...BASIC_ATTRS, ...COMBAT_ATTRS].forEach(n => {
         setNumber(`attr-${n}`, '');
         document.getElementById(`gl-${n}`).checked = false;
@@ -366,6 +378,7 @@
     document.getElementById('btnReset').addEventListener('click', resetForm);
     document.getElementById('btnCopy').addEventListener('click', copyExportText);
     document.getElementById('previewLevel').addEventListener('input', updatePreview);
+    document.getElementById('configType').addEventListener('change', updatePreview);
     // 各输入变化时也更新预览
     [...document.querySelectorAll('input')].forEach(el => el.addEventListener('input', updatePreview));
     updatePreview();
