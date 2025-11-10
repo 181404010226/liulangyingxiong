@@ -2,6 +2,8 @@
   "name": "liulangyingxiong",
   "uuid": "b846d687-81b8-4b1e-afad-eb52be59beaf",
   "creator": {
-    "version": "3.8.7"
+    "version": "3.8.7",
+    "target": "ES2017",
+    "lib": ["ES2017", "DOM"]
   }
 }

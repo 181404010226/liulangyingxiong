@@ -154,10 +154,10 @@
   <script>
     // 属性定义（与战斗系统文档一致）
     const BASIC_ATTRS = [
-      '攻击力', '攻击加成', '法强加成', '护甲', '魔抗', '攻击距离', '移速'
+      '攻击力', '法强', '生命值', '护甲', '魔抗', '攻击距离', '移速'
     ];
     const COMBAT_ATTRS = [
-      '攻速', '暴击率', '暴击倍率', '吸血', '增伤', '减伤', '法力回复'
+      '攻速', '暴击率', '暴击倍率', '增伤', '减伤', '法力回复'
     ];
 
     // 构建输入行
@@ -334,21 +334,30 @@
       alert('已复制导出内容到剪贴板');
     }
 
+    // 计算等级成长（每10级让“每级增量”提升）
+    // 1~10: x；11~20: x+y；21~30: x+2y...
+    function totalIncrement(level, x, y) {
+      const L = Math.max(1, level);
+      const k = Math.floor((L - 1) / 10);
+      const m = L - 10 * k;
+      const yTimes = 10 * k * (k - 1) / 2 + m * k;
+      return x * L + y * yTimes;
+    }
+
     function computeAtLevel(level) {
       const data = getHeroJSON();
       const resBasic = {};
       const resCombat = {};
       const perLevel = data['成长配置']['每级'] || {};
       const per10 = data['成长配置']['每10级'] || {};
-      const bonus10Times = Math.floor(level / 10);
       BASIC_ATTRS.forEach(n => {
         const base = data['基础属性'][n] || 0;
-        const inc = (perLevel[n] || 0) * level + (per10[n] || 0) * bonus10Times;
+        const inc = totalIncrement(level, (perLevel[n] || 0), (per10[n] || 0));
         resBasic[n] = base + inc;
       });
       COMBAT_ATTRS.forEach(n => {
         const base = data['战斗属性'][n] || 0;
-        const inc = (perLevel[n] || 0) * level + (per10[n] || 0) * bonus10Times;
+        const inc = totalIncrement(level, (perLevel[n] || 0), (per10[n] || 0));
         resCombat[n] = base + inc;
       });
       return { 基础属性: resBasic, 战斗属性: resCombat };
