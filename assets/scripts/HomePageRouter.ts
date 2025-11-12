@@ -1,6 +1,7 @@
 import { _decorator, Component, Node, Prefab, CCString, instantiate, Button, EventHandler } from 'cc';
 import { PlayerData } from './data/PlayerData';
 import { BattlePageManager } from './BattlePageManager';
+import { BlackShopPanel } from './BlackShop/BlackShop';
 const { ccclass, property } = _decorator;
 
 @ccclass('HomePageEntry')
@@ -29,6 +30,9 @@ export class HomePageRouter extends Component {
   @property({ type: PlayerData, tooltip: '玩家数据（包含解锁英雄与 Registry）' })
   playerData: PlayerData | null = null;
 
+  @property({ type: Node, tooltip: '防穿透点击的覆盖节点（非首页时显示、首页时隐藏）' })
+  clickBlocker: Node | null = null;
+
   private _instances: Record<string, Node> = {};
 
   start() {
@@ -41,11 +45,13 @@ export class HomePageRouter extends Component {
     if (!node) return;
     if (this.onlyOneActive) this.hideAllExcept(pageId);
     node.active = true;
+    this.updateClickBlockerState();
   }
 
   hidePage(pageId: string) {
     const n = this._instances[pageId];
     if (n) n.active = false;
+    this.updateClickBlockerState();
   }
 
   hideAllExcept(exceptId: string) {
@@ -90,6 +96,8 @@ export class HomePageRouter extends Component {
     this._instances[pageId] = n;
     // 若是战斗页面，传递玩家候选与返回回调
     this.setupBattlePageIfAny(n, pageId);
+    // 若是黑市页面，绑定回调（含返回与购买获得钻石）
+    this.setupBlackShopIfAny(n, pageId);
     return n;
   }
 
@@ -119,6 +127,46 @@ export class HomePageRouter extends Component {
     mgr.onBack = () => {
       this.hidePage(pageId);
     };
+    this.updateClickBlockerState();
+  }
+
+  /**
+   * 若页面包含 BlackShopPanel，则绑定返回回调，并在购买时增加钻石（包含首充翻倍逻辑由面板内部处理）。
+   */
+  private setupBlackShopIfAny(pageNode: Node, pageId: string) {
+    const panel = pageNode.getComponent(BlackShopPanel) || pageNode.getComponentInChildren(BlackShopPanel);
+    const pd = this.playerData;
+    if (!panel || !pd) return;
+
+    panel.setCallbacks({
+      onBack: () => {
+        this.hidePage(pageId);
+      },
+      onSection: (_index: number, amount: number) => {
+        // 商店已处理首充翻倍，此处直接增加钻石并持久化
+        pd.addDiamonds(amount);
+      }
+    });
+    this.updateClickBlockerState();
+  }
+
+  /**
+   * 根据是否有页面激活来切换防穿透节点显示：
+   * - 有任意页面激活：显示覆盖节点以防点击穿透首页
+   * - 没有页面激活（视为首页）：隐藏覆盖节点
+   */
+  private updateClickBlockerState() {
+    const blocker = this.clickBlocker;
+    if (!blocker) return;
+    let anyActive = false;
+    for (const id in this._instances) {
+      const n = this._instances[id];
+      if (n && n.active) {
+        anyActive = true;
+        break;
+      }
+    }
+    blocker.active = anyActive;
   }
 }
 

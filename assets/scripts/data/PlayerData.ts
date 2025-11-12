@@ -1,6 +1,7 @@
 import { _decorator, Component, CCInteger, CCString } from 'cc';
 import { HeroRegistry, HeroConfig } from './HeroRegistry';
 import { StageRegistry, StageEnemy } from './StageRegistry';
+import { PlayerStorage } from './PlayerStorage';
 
 const { ccclass, property } = _decorator;
 
@@ -37,6 +38,10 @@ export class PlayerData extends Component {
   heroLevels: HeroLevelEntry[] = [];
 
   onLoad() {
+    // 1) 读取持久化的钻石/金币
+    this.diamonds = PlayerStorage.loadDiamonds(this.diamonds);
+    this.coins = PlayerStorage.loadCoins(this.coins);
+    // 2) 初始化解锁（根据策划初始品阶）
     this.initUnlocksFromRegistry();
   }
 
@@ -86,6 +91,14 @@ export class PlayerData extends Component {
       e.ascendLevel = ascendLevel;
       this.heroLevels.push(e);
     }
+  }
+
+  // 增加钻石并持久化保存
+  addDiamonds(amount: number) {
+    const add = Math.max(0, Math.floor(amount || 0));
+    if (add <= 0) return;
+    this.diamonds += add;
+    PlayerStorage.saveDiamonds(this.diamonds);
   }
 
   getHeroLevel(name: string): number {
