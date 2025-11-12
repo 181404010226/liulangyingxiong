@@ -77,6 +77,7 @@
     }
     .section-title { display:flex; align-items:center; justify-content:space-between; margin:0 0 10px; }
     .section-title h2 { margin:0; }
+    .asc-controls { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
   </style>
 </head>
 <body>
@@ -100,6 +101,30 @@
         <div class="row">
           <label for="heroName">名字</label>
           <input id="heroName" type="text" placeholder="例如：艾希" />
+        </div>
+        <div class="row">
+          <label for="posPriority">站位优先级</label>
+          <input id="posPriority" type="number" min="0" step="1" placeholder="例如：1" />
+        </div>
+        <div class="row">
+          <label for="career">职业</label>
+          <select id="career" style="width:100%; background:#0c1116; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 10px;">
+            <option value="" selected>选择职业</option>
+            <option value="刺客">刺客</option>
+            <option value="肉盾">肉盾</option>
+            <option value="远程输出">远程输出</option>
+            <option value="战士">战士</option>
+            <option value="治疗">治疗</option>
+          </select>
+        </div>
+        <div class="row">
+          <label for="rarity">初始品阶</label>
+          <select id="rarity" style="width:100%; background:#0c1116; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 10px;">
+            <option value="" selected>选择品阶</option>
+            <option value="r">r</option>
+            <option value="sr">sr</option>
+            <option value="ssr">ssr</option>
+          </select>
         </div>
         <div class="attrs">
           <div class="attr-panel" id="basicPanel">
@@ -133,6 +158,15 @@
         <div class="preview" id="previewOutput">在此预览指定等级下的属性值</div>
       </section>
     </div>
+
+    <section class="panel" style="margin-top:16px;">
+      <div class="section-title">
+        <h2>升阶配置</h2>
+        <span class="note">最多 4 次；对某个属性进行百分比或固定加成</span>
+      </div>
+      <div id="ascendRows"></div>
+      <div class="note">兼容旧 JSON：未配置则导出为空数组</div>
+    </section>
 
     <section class="panel" style="margin-top:16px;">
       <div class="section-title">
@@ -204,6 +238,72 @@
       });
     }
 
+    // 构建升阶配置行（最多4次）
+    function buildAscendRows() {
+      const container = document.getElementById('ascendRows');
+      if (!container) return;
+      const allAttrs = [...BASIC_ATTRS, ...COMBAT_ATTRS];
+      for (let i = 1; i <= 4; i++) {
+        const row = document.createElement('div');
+        row.className = 'row';
+
+        const label = document.createElement('label');
+        label.textContent = `升阶 ${i}`;
+
+        const controls = document.createElement('div');
+        controls.className = 'asc-controls';
+
+        const enableNote = document.createElement('span');
+        enableNote.className = 'note';
+        enableNote.textContent = '启用';
+
+        const enable = document.createElement('input');
+        enable.type = 'checkbox';
+        enable.id = `asc-enable-${i}`;
+
+        const attrSel = document.createElement('select');
+        attrSel.id = `asc-attr-${i}`;
+        attrSel.style.cssText = 'width:auto; min-width:140px; background:#0c1116; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 10px;';
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = '选择属性';
+        placeholder.selected = true;
+        attrSel.appendChild(placeholder);
+        allAttrs.forEach(n => {
+          const opt = document.createElement('option');
+          opt.value = n;
+          opt.textContent = n;
+          attrSel.appendChild(opt);
+        });
+
+        const typeSel = document.createElement('select');
+        typeSel.id = `asc-type-${i}`;
+        typeSel.style.cssText = 'width:auto; min-width:140px; background:#0c1116; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 10px;';
+        ['百分比','固定'].forEach(t => {
+          const opt = document.createElement('option');
+          opt.value = t;
+          opt.textContent = t === '百分比' ? '百分比加成' : '固定加成';
+          typeSel.appendChild(opt);
+        });
+
+        const val = document.createElement('input');
+        val.type = 'number';
+        val.step = 'any';
+        val.placeholder = '数值';
+        val.id = `asc-value-${i}`;
+
+        controls.appendChild(enableNote);
+        controls.appendChild(enable);
+        controls.appendChild(attrSel);
+        controls.appendChild(typeSel);
+        controls.appendChild(val);
+
+        row.appendChild(label);
+        row.appendChild(controls);
+        container.appendChild(row);
+      }
+    }
+
     function getNumber(id) {
       const el = document.getElementById(id);
       if (!el) return 0;
@@ -220,6 +320,9 @@
     function getHeroJSON() {
       const name = document.getElementById('heroName').value.trim();
       const type = document.getElementById('configType')?.value || '英雄';
+      const posPriority = getNumber('posPriority');
+      const career = document.getElementById('career')?.value || '';
+      const rarity = document.getElementById('rarity')?.value || '';
       const basic = {};
       BASIC_ATTRS.forEach(n => basic[n] = getNumber(`attr-${n}`));
       const combat = {};
@@ -239,14 +342,32 @@
       const json = {
         '类型': type,
         '名字': name,
+        '站位优先级': posPriority,
+        '职业': career,
+        '初始品阶': rarity,
         '基础属性': basic,
         '战斗属性': combat,
         '成长配置': {
           '每级': perLevel,
           '每10级': per10
-        }
+        },
+        '升阶配置': getAscendJSON()
       };
       return json;
+    }
+
+    function getAscendJSON() {
+      const asc = [];
+      for (let i = 1; i <= 4; i++) {
+        const enable = document.getElementById(`asc-enable-${i}`)?.checked;
+        const attr = document.getElementById(`asc-attr-${i}`)?.value || '';
+        const type = document.getElementById(`asc-type-${i}`)?.value || '百分比';
+        const val = getNumber(`asc-value-${i}`);
+        if (enable && attr && Number.isFinite(val)) {
+          asc.push({ '属性': attr, '类型': (type === '固定' ? '固定' : '百分比'), '数值': val });
+        }
+      }
+      return asc;
     }
 
     function fillFromJSON(data) {
@@ -254,6 +375,11 @@
         const typeEl = document.getElementById('configType');
         if (typeEl) typeEl.value = data['类型'] ?? '英雄';
         document.getElementById('heroName').value = data['名字'] ?? '';
+        setNumber('posPriority', data['站位优先级'] ?? '');
+        const careerEl = document.getElementById('career');
+        if (careerEl) careerEl.value = data['职业'] ?? '';
+        const rarityEl = document.getElementById('rarity');
+        if (rarityEl) rarityEl.value = data['初始品阶'] ?? '';
         const basic = data['基础属性'] || {};
         BASIC_ATTRS.forEach(n => setNumber(`attr-${n}`, basic[n] ?? ''));
         const combat = data['战斗属性'] || {};
@@ -272,6 +398,27 @@
           setNumber(`gv-${n}`, vL ?? '');
           setNumber(`g10v-${n}`, v10 ?? '');
         });
+
+        // 升阶配置
+        const asc = Array.isArray(data['升阶配置']) ? data['升阶配置'] : [];
+        for (let i = 1; i <= 4; i++) {
+          const item = asc[i - 1];
+          const en = document.getElementById(`asc-enable-${i}`);
+          const attrSel = document.getElementById(`asc-attr-${i}`);
+          const typeSel = document.getElementById(`asc-type-${i}`);
+          if (item) {
+            if (en) en.checked = true;
+            if (attrSel) attrSel.value = item['属性'] ?? '';
+            const t = item['类型'];
+            if (typeSel) typeSel.value = (t === '固定' || t === '固定加成') ? '固定' : '百分比';
+            setNumber(`asc-value-${i}`, item['数值'] ?? '');
+          } else {
+            if (en) en.checked = false;
+            if (attrSel) attrSel.value = '';
+            if (typeSel) typeSel.value = '百分比';
+            setNumber(`asc-value-${i}`, '');
+          }
+        }
       } catch (e) {
         alert('导入失败：JSON 格式不符合预期');
         console.error(e);
@@ -314,6 +461,11 @@
     function resetForm() {
       document.getElementById('heroName').value = '';
       document.getElementById('configType').value = '英雄';
+      setNumber('posPriority', '');
+      const careerEl = document.getElementById('career');
+      if (careerEl) careerEl.value = '';
+      const rarityEl = document.getElementById('rarity');
+      if (rarityEl) rarityEl.value = '';
       [...BASIC_ATTRS, ...COMBAT_ATTRS].forEach(n => {
         setNumber(`attr-${n}`, '');
         document.getElementById(`gl-${n}`).checked = false;
@@ -321,6 +473,15 @@
         setNumber(`gv-${n}`, '');
         setNumber(`g10v-${n}`, '');
       });
+      for (let i = 1; i <= 4; i++) {
+        const en = document.getElementById(`asc-enable-${i}`);
+        const attrSel = document.getElementById(`asc-attr-${i}`);
+        const typeSel = document.getElementById(`asc-type-${i}`);
+        if (en) en.checked = false;
+        if (attrSel) attrSel.value = '';
+        if (typeSel) typeSel.value = '百分比';
+        setNumber(`asc-value-${i}`, '');
+      }
       document.getElementById('exportText').value = '';
       document.getElementById('previewLevel').value = 1;
       updatePreview();
@@ -360,6 +521,31 @@
         const inc = totalIncrement(level, (perLevel[n] || 0), (per10[n] || 0));
         resCombat[n] = base + inc;
       });
+      // 应用升阶加成（百分比叠加、固定叠加）
+      const asc = Array.isArray(data['升阶配置']) ? data['升阶配置'] : [];
+      const fixed = {};
+      const pct = {};
+      asc.forEach(item => {
+        const attr = item['属性'];
+        const type = item['类型'];
+        const v = Number(item['数值']) || 0;
+        if (!attr || !Number.isFinite(v)) return;
+        if (type === '固定' || type === '固定加成') {
+          fixed[attr] = (fixed[attr] || 0) + v;
+        } else {
+          pct[attr] = (pct[attr] || 0) + v;
+        }
+      });
+      BASIC_ATTRS.forEach(n => {
+        const p = pct[n] || 0;
+        const f = fixed[n] || 0;
+        resBasic[n] = resBasic[n] * (1 + p / 100) + f;
+      });
+      COMBAT_ATTRS.forEach(n => {
+        const p = pct[n] || 0;
+        const f = fixed[n] || 0;
+        resCombat[n] = resCombat[n] * (1 + p / 100) + f;
+      });
       return { 基础属性: resBasic, 战斗属性: resCombat };
     }
 
@@ -379,6 +565,7 @@
     buildAttrInputs('basicAttrs', BASIC_ATTRS);
     buildAttrInputs('combatAttrs', COMBAT_ATTRS);
     buildGrowthRows();
+    buildAscendRows();
 
     // 事件绑定
     document.getElementById('btnExport').addEventListener('click', exportJSON);
@@ -390,6 +577,8 @@
     document.getElementById('configType').addEventListener('change', updatePreview);
     // 各输入变化时也更新预览
     [...document.querySelectorAll('input')].forEach(el => el.addEventListener('input', updatePreview));
+    // 下拉选择变化时也更新预览
+    [...document.querySelectorAll('select')].forEach(el => el.addEventListener('change', updatePreview));
     updatePreview();
   </script>
 </body>

@@ -1,0 +1,134 @@
+{
+  "ver": "1.0.27",
+  "importer": "image",
+  "imported": true,
+  "uuid": "26e9b5b7-0841-4f2c-9280-b41ed5ae7466",
+  "files": [
+    ".json",
+    ".png"
+  ],
+  "subMetas": {
+    "6c48a": {
+      "importer": "texture",
+      "uuid": "26e9b5b7-0841-4f2c-9280-b41ed5ae7466@6c48a",
+      "displayName": "姬破阵",
+      "id": "6c48a",
+      "name": "texture",
+      "userData": {
+        "wrapModeS": "clamp-to-edge",
+        "wrapModeT": "clamp-to-edge",
+        "imageUuidOrDatabaseUri": "26e9b5b7-0841-4f2c-9280-b41ed5ae7466",
+        "isUuid": true,
+        "visible": false,
+        "minfilter": "linear",
+        "magfilter": "linear",
+        "mipfilter": "none",
+        "anisotropy": 0
+      },
+      "ver": "1.0.22",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "f9941": {
+      "importer": "sprite-frame",
+      "uuid": "26e9b5b7-0841-4f2c-9280-b41ed5ae7466@f9941",
+      "displayName": "姬破阵",
+      "id": "f9941",
+      "name": "spriteFrame",
+      "userData": {
+        "trimThreshold": 1,
+        "rotated": false,
+        "offsetX": -110,
+        "offsetY": 8.5,
+        "trimX": 328,
+        "trimY": 0,
+        "width": 2772,
+        "height": 2479,
+        "rawWidth": 3648,
+        "rawHeight": 2496,
+        "borderTop": 0,
+        "borderBottom": 0,
+        "borderLeft": 0,
+        "borderRight": 0,
+        "packable": true,
+        "pixelsToUnit": 100,
+        "pivotX": 0.5,
+        "pivotY": 0.5,
+        "meshType": 0,
+        "vertices": {
+          "rawPosition": [
+            -1386,
+            -1239.5,
+            0,
+            1386,
+            -1239.5,
+            0,
+            -1386,
+            1239.5,
+            0,
+            1386,
+            1239.5,
+            0
+          ],
+          "indexes": [
+            0,
+            1,
+            2,
+            2,
+            1,
+            3
+          ],
+          "uv": [
+            328,
+            2496,
+            3100,
+            2496,
+            328,
+            17,
+            3100,
+            17
+          ],
+          "nuv": [
+            0.08991228070175439,
+            0.006810897435897436,
+            0.8497807017543859,
+            0.006810897435897436,
+            0.08991228070175439,
+            1,
+            0.8497807017543859,
+            1
+          ],
+          "minPos": [
+            -1386,
+            -1239.5,
+            0
+          ],
+          "maxPos": [
+            1386,
+            1239.5,
+            0
+          ]
+        },
+        "isUuid": true,
+        "imageUuidOrDatabaseUri": "26e9b5b7-0841-4f2c-9280-b41ed5ae7466@6c48a",
+        "atlasUuid": "",
+        "trimType": "auto"
+      },
+      "ver": "1.0.12",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    }
+  },
+  "userData": {
+    "type": "sprite-frame",
+    "hasAlpha": true,
+    "fixAlphaTransparencyArtifacts": false,
+    "redirect": "26e9b5b7-0841-4f2c-9280-b41ed5ae7466@6c48a"
+  }
+}
