@@ -1,5 +1,5 @@
 import { _decorator, Component, Node, Label, Button, Sprite, SpriteFrame, Prefab, instantiate } from 'cc';
-import { HeroInfoManager } from './HeroInfoManager';
+import { HeroRegistry } from './data/HeroRegistry';
 const { ccclass, property } = _decorator;
 
 @ccclass('BattlePageManager')
@@ -43,15 +43,18 @@ export class BattlePageManager extends Component {
   @property({ type: [Node] })
   rightPositions: Node[] = [];
 
-  // 7. 英雄信息管理器（通过标签取头像 & 预制体）
-  @property({ type: HeroInfoManager })
-  heroInfo!: HeroInfoManager;
+  // 7. 英雄资源注册表（通过英雄名字解析头像 & 预制体）
+  @property({ type: HeroRegistry })
+  registry: HeroRegistry | null = null;
 
   @property({ tooltip: '最多可选择的英雄数量' })
   maxSelectCount: number = 5;
 
   private _selectedTags: string[] = [];
   private _avatarNodes: Node[] = [];
+  
+  // 首页传入的返回回调；战斗页面点击返回时调用
+  onBack: (() => void) | null = null;
 
   // 基本 UI 设置接口
   setBackground(frame: SpriteFrame) {
@@ -67,8 +70,8 @@ export class BattlePageManager extends Component {
     if (this.stageProgress) this.stageProgress.string = text;
   }
 
-  // 生成底部头像（根据传入标签数组）
-  setHeroCandidates(tags: string[]) {
+  // 生成底部头像（根据传入的英雄名字数组）
+  setHeroCandidates(names: string[]) {
     if (!this.bottomLayout || !this.avatarItemPrefab) return;
 
     // 清理旧项
@@ -76,10 +79,11 @@ export class BattlePageManager extends Component {
     this._avatarNodes = [];
     this._selectedTags = [];
 
-    tags.forEach(tag => {
+    names.forEach(name => {
       const item = instantiate(this.avatarItemPrefab);
       const sp = item.getComponent(Sprite) || item.getComponentInChildren(Sprite);
-      const sf = this.heroInfo ? this.heroInfo.getAvatar(tag) : null;
+      const assets = this.registry ? this.registry.resolveAssetsByName(name) : undefined;
+      const sf = assets?.avatar || null;
       if (sp && sf) sp.spriteFrame = sf;
 
       // 默认遮罩隐藏
@@ -87,7 +91,7 @@ export class BattlePageManager extends Component {
       if (maskNode) maskNode.active = false;
 
       // 点击选择/取消
-      item.on(Node.EventType.TOUCH_END, () => this.toggleAvatarSelection(item, tag), this);
+      item.on(Node.EventType.TOUCH_END, () => this.toggleAvatarSelection(item, name), this);
 
       this.bottomLayout.addChild(item);
       this._avatarNodes.push(item);
@@ -98,14 +102,14 @@ export class BattlePageManager extends Component {
   }
 
   // 选择逻辑与遮罩控制
-  private toggleAvatarSelection(item: Node, tag: string) {
-    const isSelected = this._selectedTags.includes(tag);
+  private toggleAvatarSelection(item: Node, name: string) {
+    const isSelected = this._selectedTags.includes(name);
     if (isSelected) {
-      this._selectedTags = this._selectedTags.filter(t => t !== tag);
+      this._selectedTags = this._selectedTags.filter(t => t !== name);
       this.setMaskActive(item, false);
     } else {
       if (this._selectedTags.length >= this.maxSelectCount) return;
-      this._selectedTags.push(tag);
+      this._selectedTags.push(name);
       this.setMaskActive(item, true);
     }
 
@@ -143,15 +147,16 @@ export class BattlePageManager extends Component {
     this.placeHeroesOnSide(this.rightPositions, enemyTags);
   }
 
-  private placeHeroesOnSide(slots: Node[], tags: string[]) {
-    const count = Math.min(slots.length, tags.length);
+  private placeHeroesOnSide(slots: Node[], names: string[]) {
+    const count = Math.min(slots.length, names.length);
     // 清空所有槽位
     for (const s of slots) s.removeAllChildren();
     // 逐个实例化英雄预制体并挂到槽位
     for (let i = 0; i < count; i++) {
       const slot = slots[i];
-      const tag = tags[i];
-      const prefab = this.heroInfo ? this.heroInfo.getPrefab(tag) : null;
+      const name = names[i];
+      const assets = this.registry ? this.registry.resolveAssetsByName(name) : undefined;
+      const prefab = assets?.prefab || null;
       if (slot && prefab) {
         const heroNode = instantiate(prefab);
         slot.addChild(heroNode);
@@ -161,12 +166,12 @@ export class BattlePageManager extends Component {
 
   // 按钮事件（在面板 Button 的点击事件中绑定即可）
   onClickBack() {
-    this.node.emit('back');
+    if (this.onBack) this.onBack();
   }
 
   onClickStart() {
     this.placeHeroesOnLeftFromSelection();
-    this.node.emit('start', this.getSelectedHeroTags());
+    // 开始战斗时的后续逻辑可在页面内处理，无需消息派发
   }
 }
 
