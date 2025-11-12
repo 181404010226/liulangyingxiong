@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Label, Button, Sprite, SpriteFrame, Prefab, instantiate, ProgressBar, director } from 'cc';
+import { _decorator, Component, Node, Label, Button, Sprite, SpriteFrame, Prefab, instantiate, ProgressBar } from 'cc';
 import { HeroRegistry } from './data/HeroRegistry';
 import type { StageEnemy } from './data/StageRegistry';
 import { HeroController } from './组件/HeroController';
@@ -103,6 +103,7 @@ export class BattlePageManager extends Component {
   private _leftHeroNodes: Node[] = [];
   private _rightHeroNodes: Node[] = [];
   private _allyProgressMap: Map<string, { level: number; ascend: number }> = new Map();
+  private _controllers: HeroController[] = [];
 
   // 全局速度与暂停状态
   private _currentSpeed: number = 1; // 1 或 2
@@ -343,19 +344,8 @@ export class BattlePageManager extends Component {
     // 其他战斗逻辑可在页面内继续处理
   }
 
-  // —— 战斗中：倍速/暂停/继续/重开 ——
-  private setGlobalSpeed(scale: number) {
-    try {
-      // 统一通过调度器时间缩放控制全局速度
-      director.getScheduler().setTimeScale(scale);
-    } catch (e) {
-      // 兼容环境：若无调度器可用，不抛错以免影响运行
-    }
-  }
-
   private applyGlobalSpeed() {
-    const scale = this._isPaused ? 0 : this._currentSpeed;
-    this.setGlobalSpeed(scale);
+    this.applyPauseStateToControllers();
   }
 
   onClickPauseButton() {
@@ -427,6 +417,7 @@ export class BattlePageManager extends Component {
   }
 
   private attachHeroControllers() {
+    this._controllers = [];
     // 收集左右角色节点列表
     this._leftHeroNodes = this.collectHeroNodesFromSlots(this.leftPositions);
     this._rightHeroNodes = this.collectHeroNodesFromSlots(this.rightPositions);
@@ -462,6 +453,8 @@ export class BattlePageManager extends Component {
       const asc = p ? Math.max(0, p.ascend) : 0;
       ctrl.initializeFinalAttributes(cfg, lv, asc);
       ctrl.applyStartOffset();
+      ctrl.setGlobalTimeScale(this._isPaused ? 0 : this._currentSpeed);
+      this._controllers.push(ctrl);
     }
 
     // 敌方：按关卡配置设置等级/进阶
@@ -479,6 +472,15 @@ export class BattlePageManager extends Component {
       const asc = ec ? (ec['进阶等级'] || 0) : 0;
       ctrl.initializeFinalAttributes(cfg, lv, asc);
       ctrl.applyStartOffset();
+      ctrl.setGlobalTimeScale(this._isPaused ? 0 : this._currentSpeed);
+      this._controllers.push(ctrl);
+    }
+  }
+
+  private applyPauseStateToControllers() {
+    const s = this._isPaused ? 0 : this._currentSpeed;
+    for (const c of this._controllers) {
+      if (c && c.node && c.node.isValid) c.setGlobalTimeScale(s);
     }
   }
 }

@@ -68,6 +68,13 @@ export class HeroController extends Component {
   // 攻击/技能控制
   public skillGauge: number = 0; // 0~100
   private _attackCdRemain = 0;   // 攻击冷却剩余（秒）
+  public globalTimeScale: number = 1;
+
+  setGlobalTimeScale(scale: number) {
+    const s = Math.max(0, Number(scale) || 0);
+    this.globalTimeScale = s;
+    this._applyAnimationSpeed(s);
+  }
 
   onLoad() {
     this._anim = this.findAnimation(this.node);
@@ -156,6 +163,12 @@ export class HeroController extends Component {
   }
 
   update(dt: number) {
+    if (this.globalTimeScale <= 0) {
+      this._applyAnimationSpeed(0);
+      return;
+    }
+    dt *= this.globalTimeScale;
+    this._applyAnimationSpeed(this.globalTimeScale);
     // 动作锁
     if (this._actionLock > 0) {
       this._actionLock -= dt;
@@ -273,12 +286,12 @@ export class HeroController extends Component {
 
   private playAttack(): boolean {
     if (!this._anim) return false;
-    return this._playCandidates(['attack', 'hit']);
+    return this._playCandidates(['attack', 'kill']);
   }
 
   private playSkill(): boolean {
     if (!this._anim) return false;
-    return this._playCandidates(['skill', 'kill']);
+    return this._playCandidates(['skill', 'hit']);
   }
 
   private _isPlayingOneOf(names: string[]): boolean {
@@ -304,6 +317,8 @@ export class HeroController extends Component {
       if (clip) {
         try {
           this._anim.play(name);
+          const st = this._anim.getState(name);
+          if (st) st.speed = this.globalTimeScale;
           const dur = clip.duration || 0.5;
           // run/idle 不加锁；攻击/技能加锁避免被打断
           if (n === 'attack' || n === 'hit' || n === 'skill' || n === 'kill') {
@@ -316,6 +331,17 @@ export class HeroController extends Component {
       }
     }
     return false;
+  }
+
+  private _applyAnimationSpeed(scale: number) {
+    const a = this._anim;
+    if (!a) return;
+    const clips = a.clips || [];
+    for (const c of clips) {
+      if (!c) continue;
+      const st = a.getState(c.name);
+      if (st) st.speed = scale;
+    }
   }
 
   private _findClipByName(name: string): AnimationClip | null {
