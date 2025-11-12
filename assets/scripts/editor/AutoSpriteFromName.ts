@@ -1,4 +1,4 @@
-import { _decorator, Component, Vec3, Node, Sprite, SpriteFrame, assetManager } from 'cc';
+import { _decorator, Component, Vec3, Node, Sprite, SpriteFrame, assetManager, Animation, AnimationClip, animation } from 'cc';
 import { EDITOR } from 'cc/env';
 const { ccclass, property, executeInEditMode } = _decorator;
 declare const Editor: any;
@@ -36,6 +36,15 @@ export class AutoSpriteFromName extends Component {
 
   @property({ tooltip: '为 Sprite 设置 RAW 尺寸模式' })
   setRawSizeMode: boolean = true;
+
+  @property({ tooltip: '是否自动为动作文件夹生成动画剪辑并添加到 Animation' })
+  autoGenerateClips: boolean = true;
+
+  @property({ tooltip: '动画采样率（FPS）' })
+  animationSample: number = 12;
+
+  @property({ tooltip: '目录名包含“die”时，剪辑使用一次播放（非循环）' })
+  nonLoopForDie: boolean = true;
 
   private _applied = false;
   private _loading = false;
@@ -88,6 +97,11 @@ export class AutoSpriteFromName extends Component {
   private buildDbBaseUrl(): string {
     const name = this.resolveFileName();
     return `${this.baseDbDir}/${name}`;
+  }
+
+  private getActorDirUrl(): string {
+    // 角色目录：db://assets/人物/<角色名>
+    return this.buildDbBaseUrl();
   }
 
   private async querySpriteFrameUuid(): Promise<string | null> {
@@ -147,9 +161,128 @@ export class AutoSpriteFromName extends Component {
       } else {
         console.warn(`[AutoSpriteFromName] 未找到 SpriteFrame：${this.buildDbBaseUrl()}/spriteFrame`);
       }
+      // 生成并挂载动画剪辑
+      if (this.autoGenerateClips) {
+        await this.applyAnimationClips(target);
+      }
       this._loading = false;
     }
     this.setScale(target);
     this._applied = true;
+  }
+
+  private ensureAnimation(target: Node): Animation {
+    let anim = target.getComponent(Animation);
+    if (!anim) anim = target.addComponent(Animation);
+    return anim;
+  }
+
+  private async applyAnimationClips(target: Node) {
+    try {
+      if (!Editor?.Message?.request) return;
+      const actorUrl = this.getActorDirUrl();
+      // 在角色目录下检索所有 SpriteFrame 资源
+      const all = await Editor.Message.request('asset-db', 'query-assets', {
+        pattern: `${actorUrl}/**`,
+        ccType: 'cc.SpriteFrame',
+      });
+      if (!Array.isArray(all) || all.length === 0) return;
+
+      // 根据第一层子目录分组（动作目录）
+      const groups: Map<string, any[]> = new Map();
+      for (const ai of all) {
+        const url = String(ai?.url || '');
+        if (!url.startsWith(actorUrl + '/')) continue;
+        const rest = url.slice(actorUrl.length + 1); // 形如：hero_run/xxx/spriteFrame
+        const parts = rest.split('/');
+        if (parts.length < 2) continue; // 排除顶层 spriteFrame
+        const action = parts[0];
+        if (!action || action === 'spriteFrame') continue;
+        const list = groups.get(action) || [];
+        list.push(ai);
+        groups.set(action, list);
+      }
+
+      if (groups.size === 0) return;
+
+      const anim = this.ensureAnimation(target);
+      const existingClips: AnimationClip[] = anim.clips ? anim.clips.slice() : [];
+
+      for (const [action, items] of groups.entries()) {
+        // 按 URL 字典序排序以匹配文件名顺序
+        items.sort((a: any, b: any) => String(a?.url || '').localeCompare(String(b?.url || '')));
+        const uuids: string[] = items
+          .map((ai: any) => String(ai?.uuid || ''))
+          .filter(u => !!u);
+        if (uuids.length === 0) continue;
+
+        // 加载所有帧
+        const frames: SpriteFrame[] = [];
+        for (const u of uuids) {
+          try {
+            const sf = await this.loadSpriteFrameByUuid(u);
+            frames.push(sf);
+          } catch (e) {
+            console.warn(`[AutoSpriteFromName] 加载帧失败（${action}）：`, u, e);
+          }
+        }
+        if (frames.length === 0) continue;
+
+        // 将动作目录映射到已有空剪辑名称
+        const mappedName = this.mapActionToClipName(action);
+        const targetClip = existingClips.find(c => c && c.name && c.name.toLowerCase() === mappedName.toLowerCase());
+        if (targetClip) {
+          // 编辑已有剪辑（清空并重建 spriteFrame 轨道），随后保存资产
+          this.rebuildSpriteClip(targetClip, frames, /die/i.test(action));
+        } 
+      }
+
+      // 应用到 Animation 组件
+      anim.clips = existingClips;
+      if (!anim.defaultClip && existingClips.length > 0) {
+        anim.defaultClip = existingClips[0];
+      }
+    } catch (e) {
+      console.warn('[AutoSpriteFromName] 自动生成动画剪辑失败：', e);
+    }
+  }
+
+  private mapActionToClipName(actionDir: string): string {
+    const a = actionDir.toLowerCase();
+    const map: Record<string, string> = {
+      'hero_daiji': 'daiji',
+      'hero_die': 'die',
+      'hero_hit': 'hit',
+      'hero_kill': 'kill',
+      'hero_run': 'run',
+    };
+    if (map[a]) return map[a];
+    // 兜底：去掉可能的前缀 hero_
+    return a.replace(/^hero_/, '');
+  }
+
+  private rebuildSpriteClip(clip: AnimationClip, frames: SpriteFrame[], isDie: boolean) {
+    try {
+      const sample = this.animationSample > 0 ? this.animationSample : 12;
+      // 使用引擎自带的 API 生成基于 SpriteFrame 的剪辑（确保类型识别正确）
+      const generated = AnimationClip.createWithSpriteFrames(frames, sample);
+      const wrap = (this.nonLoopForDie && isDie)
+        ? AnimationClip.WrapMode.Normal
+        : AnimationClip.WrapMode.Loop;
+      generated.wrapMode = wrap;
+
+      // 覆盖到现有空剪辑
+      clip.sample = generated.sample;
+      clip.duration = generated.duration;
+      clip.wrapMode = wrap;
+      // 直接替换内部轨道数组（不同版本可能为 _tracks 或 tracks）
+      // @ts-ignore
+      const genTracks = (generated as any)._tracks ?? (generated as any).tracks ?? [];
+      // @ts-ignore
+      clip._tracks = genTracks;
+      // 不再尝试写入只读的 tracks getter，避免编辑器抛错
+    } catch (e) {
+      console.warn('[AutoSpriteFromName] 重建剪辑失败：', clip?.name, e);
+    }
   }
 }
