@@ -246,7 +246,7 @@
   },
   {
     "__type__": "cc.Node",
-    "_name": "ProgressBar-001",
+    "_name": "生命条",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_parent": {
@@ -589,7 +589,7 @@
   },
   {
     "__type__": "cc.Node",
-    "_name": "ProgressBar",
+    "_name": "技能条",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_parent": {

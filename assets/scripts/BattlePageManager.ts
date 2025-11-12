@@ -26,6 +26,13 @@ export class BattlePageManager extends Component {
   @property({ type: Button })
   startButton!: Button;
 
+  // 2.1 战斗前/战斗后根节点（通过 active 切换显示）
+  @property({ type: Node, tooltip: '战斗前根节点（进入关卡页面显示）' })
+  preBattleRoot: Node | null = null;
+
+  @property({ type: Node, tooltip: '战斗后/战斗中根节点（开始战斗后显示）' })
+  postBattleRoot: Node | null = null;
+
   // 4. 下方 layout 节点（用于承载人物头像项）
   @property({ type: Node })
   bottomLayout!: Node;
@@ -51,6 +58,13 @@ export class BattlePageManager extends Component {
   @property({ tooltip: '最多可选择的英雄数量' })
   maxSelectCount: number = 5;
 
+  // 8. 战斗中头像布局与预制体（开始战斗后将所选角色放入此 Layout）
+  @property({ type: Node, tooltip: '战斗中头像布局 Layout 节点' })
+  battleLayout: Node | null = null;
+
+  @property({ type: Prefab, tooltip: '战斗头像预制体（根节点带 Sprite）' })
+  battleAvatarPrefab: Prefab | null = null;
+
   private _selectedTags: string[] = [];
   private _avatarNodes: Node[] = [];
   private _enemyConfigs: StageEnemy[] = [];
@@ -60,6 +74,8 @@ export class BattlePageManager extends Component {
 
   onLoad() {
     this.bindButtonEvents();
+    // 默认进入页面展示战斗前、隐藏战斗后
+    this.showPreBattle();
   }
 
   private bindButtonEvents() {
@@ -99,6 +115,8 @@ export class BattlePageManager extends Component {
       .map(e => (e?.['名字'] || '').trim())
       .filter(n => n.length > 0);
     this.configureRightByStage(stageId, names);
+    // 进入关卡时确保显示战斗前态
+    this.showPreBattle();
   }
 
   // 生成底部头像（根据传入的英雄名字数组）
@@ -195,6 +213,39 @@ export class BattlePageManager extends Component {
     }
   }
 
+  // 战斗态显示控制
+  private showPreBattle() {
+    if (this.preBattleRoot) this.preBattleRoot.active = true;
+    if (this.postBattleRoot) this.postBattleRoot.active = false;
+  }
+
+  private showPostBattle() {
+    if (this.preBattleRoot) this.preBattleRoot.active = false;
+    if (this.postBattleRoot) this.postBattleRoot.active = true;
+  }
+
+  // 将选择的角色以战斗头像预制体放入战斗中 Layout
+  private populateBattleAvatars() {
+    if (!this.battleLayout || !this.battleAvatarPrefab) return;
+    // 清空旧的战斗头像
+    this.battleLayout.removeAllChildren();
+    const tags = this.getSelectedHeroTags();
+    for (const name of tags) {
+      const node = this.createBattleAvatarNode(name);
+      if (node) this.battleLayout.addChild(node);
+    }
+  }
+
+  private createBattleAvatarNode(name: string): Node | null {
+    if (!this.battleAvatarPrefab) return null;
+    const item = instantiate(this.battleAvatarPrefab);
+    const sp = item.getComponent(Sprite) || item.getComponentInChildren(Sprite);
+    const assets = this.registry ? this.registry.resolveAssetsByName(name) : undefined;
+    const sf = assets?.avatar || null;
+    if (sp && sf) sp.spriteFrame = sf;
+    return item;
+  }
+
   // 按钮事件（在面板 Button 的点击事件中绑定即可）
   onClickBack() {
     if (this.onBack) this.onBack();
@@ -202,7 +253,10 @@ export class BattlePageManager extends Component {
 
   onClickStart() {
     this.placeHeroesOnLeftFromSelection();
-    // 开始战斗时的后续逻辑可在页面内处理，无需消息派发
+    // 开始战斗：填充战斗头像并切换至战斗后界面
+    this.populateBattleAvatars();
+    this.showPostBattle();
+    // 其他战斗逻辑可在页面内继续处理
   }
 }
 
