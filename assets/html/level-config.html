@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>关卡配置（导入/导出 JSON）</title>
+  <style>
+    :root {
+      --bg: #0f1318;
+      --panel: #171e26;
+      --muted: #76808f;
+      --text: #e6eef8;
+      --accent: #3aa0ff;
+      --accent-2: #7c4dff;
+      --border: #243041;
+      --danger: #ff4d4f;
+      --ok: #52c41a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Microsoft YaHei", "Noto Sans SC", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(90deg, rgba(58,160,255,.15), rgba(124,77,255,.15));
+    }
+    header h1 { margin: 0; font-size: 20px; }
+    .container { padding: 20px; max-width: 1200px; margin: 0 auto; }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .panel h2 { margin: 0 0 12px; font-size: 16px; }
+    .row { display: grid; grid-template-columns: 160px 1fr; align-items: center; gap: 10px; margin-bottom: 10px; }
+    label { color: var(--muted); font-size: 13px; }
+    input[type="text"], input[type="number"], select {
+      width: 100%;
+      background: #0c1116;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      outline: none;
+    }
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .btns { display: flex; gap: 10px; flex-wrap: wrap; }
+    button {
+      background: var(--accent);
+      border: none;
+      color: white;
+      padding: 10px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button.secondary { background: #273244; color: #c7d2e5; }
+    button.warning { background: var(--danger); }
+    button.success { background: var(--ok); color: #0f2a14; }
+    .note { color: var(--muted); font-size: 12px; }
+    textarea {
+      width: 100%; min-height: 160px; resize: vertical;
+      background: #0c1116; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+    }
+    .level-header {
+      display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+    }
+    .level-header .title { font-size: 16px; margin: 0; }
+    .enemy-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .enemy-card { border: 1px dashed var(--border); border-radius: 8px; padding: 10px; }
+    .enemy-card h3 { margin: 0 0 8px; font-size: 14px; color: var(--muted); }
+    .equip-grid { display: grid; grid-template-columns: 90px 1fr; gap: 8px; align-items: center; }
+    .equip-grid .name { color: var(--text); }
+  </style>
+  </head>
+<body>
+  <header>
+    <h1>关卡配置（导入/导出 JSON）</h1>
+  </header>
+  <div class="container">
+    <section class="panel">
+      <div class="level-header">
+        <h2 class="title">关卡列表</h2>
+        <span class="note">每个关卡含 5 个敌人（留空代表没有）</span>
+      </div>
+      <div class="btns" style="margin-bottom:10px;">
+        <button id="btnAddLevel">添加关卡</button>
+        <button class="secondary" id="btnExport">导出 JSON（下载）</button>
+        <button class="success" id="btnCopy">复制导出内容到剪贴板</button>
+        <input type="file" id="importFile" accept="application/json" />
+        <button class="secondary" id="btnImportFile">从文件导入</button>
+        <button class="secondary" id="btnImportText">从粘贴框导入</button>
+        <button class="warning" id="btnReset">清空</button>
+      </div>
+      <div id="levelsContainer"></div>
+      <textarea id="exportText" placeholder="导出/粘贴 JSON 内容"></textarea>
+    </section>
+  </div>
+
+  <script>
+    // 角色名（来自 assets/人物 .png 文件名）
+    const ENEMY_NAMES = [
+      '云文书','冷影煞','凌峰','凌瑶','夯山','奚瑶君','姬破阵','段岳','焚天隼','苍凌雪','苍猿','赤绡','醉仙翁','锦如月','镇湖鲲'
+    ];
+
+    function buildEnemySelect(selectEl) {
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = '（空）';
+      placeholder.selected = true;
+      selectEl.appendChild(placeholder);
+      ENEMY_NAMES.forEach(n => {
+        const opt = document.createElement('option');
+        opt.value = n;
+        opt.textContent = n;
+        selectEl.appendChild(opt);
+      });
+    }
+
+    function createEnemyCard(index, init) {
+      const card = document.createElement('div');
+      card.className = 'enemy-card';
+      const title = document.createElement('h3');
+      title.textContent = `敌人 ${index}`;
+      card.appendChild(title);
+
+      // 敌人选择 + 等级
+      const row1 = document.createElement('div');
+      row1.className = 'row';
+      const lab1 = document.createElement('label'); lab1.textContent = '名字';
+      const sel = document.createElement('select');
+      sel.name = 'enemy-name';
+      sel.style.cssText = 'width:100%; background:#0c1116; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 10px;';
+      buildEnemySelect(sel);
+      row1.appendChild(lab1); row1.appendChild(sel);
+      card.appendChild(row1);
+
+      const row2 = document.createElement('div');
+      row2.className = 'row';
+      const lab2 = document.createElement('label'); lab2.textContent = '敌人等级';
+      const level = document.createElement('input');
+      level.type = 'number'; level.step = '1'; level.placeholder = '可为负数，例如 -1';
+      level.name = 'enemy-level';
+      row2.appendChild(lab2); row2.appendChild(level);
+      card.appendChild(row2);
+
+      // 英雄进阶等级（全局，不是装备的进阶）
+      const rowAsc = document.createElement('div');
+      rowAsc.className = 'row';
+      const labAsc = document.createElement('label'); labAsc.textContent = '英雄进阶等级';
+      const heroAsc = document.createElement('input');
+      heroAsc.type = 'number'; heroAsc.step = '1'; heroAsc.placeholder = '例如：0/1/2...';
+      heroAsc.name = 'hero-asc';
+      rowAsc.appendChild(labAsc); rowAsc.appendChild(heroAsc);
+      card.appendChild(rowAsc);
+
+      // 四个装备：等级 + 进阶等级
+      const equipTitle = document.createElement('div');
+      equipTitle.className = 'note';
+      equipTitle.textContent = '装备（4件）：等级';
+      card.appendChild(equipTitle);
+
+      const equips = document.createElement('div');
+      equips.className = 'equip-grid';
+
+      for (let i = 1; i <= 4; i++) {
+        const name = document.createElement('div');
+        name.className = 'name';
+        name.textContent = `装备 ${i}`;
+        const lv = document.createElement('input');
+        lv.type = 'number'; lv.step = '1'; lv.placeholder = '等级'; lv.name = 'equip-level';
+        equips.appendChild(name);
+        equips.appendChild(lv);
+      }
+      card.appendChild(equips);
+
+      // 初始化
+      if (init) {
+        sel.value = init['名字'] ?? '';
+        level.value = (init['等级'] ?? '');
+        const lvs = Array.isArray(init['装备等级']) ? init['装备等级'] : [];
+        const lvInputs = equips.querySelectorAll('input[name="equip-level"]');
+        lvInputs.forEach((el, i) => el.value = (lvs[i] ?? ''));
+        heroAsc.value = (Number.isFinite(init['进阶等级']) ? init['进阶等级'] : (init['英雄进阶等级'] ?? ''));
+      }
+
+      return card;
+    }
+
+    function addLevelRow(init) {
+      const container = document.getElementById('levelsContainer');
+      const panel = document.createElement('section');
+      panel.className = 'panel level-panel';
+
+      const header = document.createElement('div');
+      header.className = 'level-header';
+      const h2 = document.createElement('h2'); h2.className = 'title'; h2.textContent = '关卡';
+      const nameInput = document.createElement('input'); nameInput.type = 'text'; nameInput.placeholder = '关卡名'; nameInput.name = 'level-name'; nameInput.style.width = '280px';
+      const delBtn = document.createElement('button'); delBtn.className = 'warning'; delBtn.textContent = '删除此关卡';
+      delBtn.onclick = () => panel.remove();
+      header.appendChild(h2); header.appendChild(nameInput); header.appendChild(delBtn);
+      panel.appendChild(header);
+
+      const grid = document.createElement('div');
+      grid.className = 'enemy-grid';
+      for (let i = 1; i <= 5; i++) {
+        const enemyInit = init && Array.isArray(init['敌人']) ? init['敌人'][i-1] : null;
+        grid.appendChild(createEnemyCard(i, enemyInit || null));
+      }
+      panel.appendChild(grid);
+
+      if (init) {
+        nameInput.value = init['关卡名'] ?? '';
+      }
+
+      container.appendChild(panel);
+    }
+
+    function getNumber(el) {
+      if (!el) return 0;
+      const v = parseFloat(el.value);
+      return Number.isFinite(v) ? v : 0;
+    }
+
+    function getJSON() {
+      const levels = [];
+      const panels = document.querySelectorAll('.level-panel');
+      panels.forEach(panel => {
+        const levelName = panel.querySelector('input[name="level-name"]').value.trim();
+        const enemies = [];
+        const cards = panel.querySelectorAll('.enemy-card');
+        cards.forEach(card => {
+          const name = card.querySelector('select[name="enemy-name"]').value;
+          if (!name) { enemies.push(null); return; }
+          const lv = getNumber(card.querySelector('input[name="enemy-level"]'));
+          const equipLevels = Array.from(card.querySelectorAll('input[name="equip-level"]')).map(getNumber);
+          enemies.push({
+            '名字': name,
+            '等级': lv,
+            '装备等级': equipLevels,
+            '进阶等级': getNumber(card.querySelector('input[name="hero-asc"]'))
+          });
+        });
+        levels.push({ '关卡名': levelName, '敌人': enemies });
+      });
+      return { '关卡列表': levels };
+    }
+
+    function exportJSON() {
+      const json = getJSON();
+      const text = JSON.stringify(json, null, 2);
+      document.getElementById('exportText').value = text;
+      const blob = new Blob([text], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `levels.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+
+    function fillFromJSON(data) {
+      try {
+        const container = document.getElementById('levelsContainer');
+        container.innerHTML = '';
+        const arr = Array.isArray(data['关卡列表']) ? data['关卡列表'] : [];
+        if (arr.length === 0) {
+          addLevelRow();
+          return;
+        }
+        arr.forEach(item => addLevelRow(item));
+      } catch (e) {
+        alert('导入失败：JSON 格式不符合预期');
+        console.error(e);
+      }
+    }
+
+    function importFromText() {
+      const text = document.getElementById('exportText').value.trim();
+      if (!text) { alert('粘贴框为空'); return; }
+      try { const data = JSON.parse(text); fillFromJSON(data); }
+      catch (e) { alert('解析失败：请确认为合法 JSON'); }
+    }
+
+    function importFromFile() {
+      const fileInput = document.getElementById('importFile');
+      const f = fileInput.files && fileInput.files[0];
+      if (!f) { alert('请先选择一个 JSON 文件'); return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        document.getElementById('exportText').value = reader.result;
+        importFromText();
+      };
+      reader.readAsText(f, 'utf-8');
+    }
+
+    function resetForm() {
+      const container = document.getElementById('levelsContainer');
+      container.innerHTML = '';
+      addLevelRow();
+      document.getElementById('exportText').value = '';
+    }
+
+    async function copyExportText() {
+      const el = document.getElementById('exportText');
+      if (!el.value.trim()) { exportJSON(); }
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(el.value);
+        } else {
+          el.select(); document.execCommand('copy');
+        }
+        alert('已复制导出内容到剪贴板');
+      } catch (e) {
+        alert('复制失败，请手动选择粘贴框内容复制');
+      }
+    }
+
+    function init() {
+      addLevelRow();
+      document.getElementById('btnAddLevel').onclick = () => addLevelRow();
+      document.getElementById('btnExport').onclick = exportJSON;
+      document.getElementById('btnImportText').onclick = importFromText;
+      document.getElementById('btnImportFile').onclick = importFromFile;
+      document.getElementById('btnReset').onclick = resetForm;
+      document.getElementById('btnCopy').onclick = copyExportText;
+    }
+
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
