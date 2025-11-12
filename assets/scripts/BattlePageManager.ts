@@ -56,6 +56,24 @@ export class BattlePageManager extends Component {
   // 首页传入的返回回调；战斗页面点击返回时调用
   onBack: (() => void) | null = null;
 
+  onLoad() {
+    this.bindButtonEvents();
+  }
+
+  private bindButtonEvents() {
+    this.ensureButtonBinding(this.backButton, this.onClickBack);
+    this.ensureButtonBinding(this.startButton, this.onClickStart);
+  }
+
+  private ensureButtonBinding(btn: Button | null, handler: (event?: any) => void) {
+    if (!btn || !btn.node) return;
+    // 清空编辑器中可能配置的 clickEvents，避免重复触发
+    btn.clickEvents = [];
+    // 先解绑同名回调，再绑定一次，确保唯一性
+    btn.node.off(Button.EventType.CLICK, handler, this);
+    btn.node.on(Button.EventType.CLICK, handler, this);
+  }
+
   // 基本 UI 设置接口
   setBackground(frame: SpriteFrame) {
     if (this.background) this.background.spriteFrame = frame;
