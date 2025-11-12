@@ -1,5 +1,6 @@
 import { _decorator, Component, Node, Label, Button, Sprite, SpriteFrame, Prefab, instantiate } from 'cc';
 import { HeroRegistry } from './data/HeroRegistry';
+import type { StageEnemy } from './data/StageRegistry';
 const { ccclass, property } = _decorator;
 
 @ccclass('BattlePageManager')
@@ -52,6 +53,7 @@ export class BattlePageManager extends Component {
 
   private _selectedTags: string[] = [];
   private _avatarNodes: Node[] = [];
+  private _enemyConfigs: StageEnemy[] = [];
   
   // 首页传入的返回回调；战斗页面点击返回时调用
   onBack: (() => void) | null = null;
@@ -86,6 +88,17 @@ export class BattlePageManager extends Component {
 
   setStageProgress(text: string) {
     if (this.stageProgress) this.stageProgress.string = text;
+  }
+
+  // 传入关卡信息与敌人数据，设置标题并布置右侧敌人阵容
+  setStageAndEnemies(stageId: string, enemies: StageEnemy[]) {
+    this._enemyConfigs = Array.isArray(enemies) ? enemies : [];
+    const label = stageId && stageId.trim().length > 0 ? `${stageId}` : '';
+    this.setStageProgress(label);
+    const names = this._enemyConfigs
+      .map(e => (e?.['名字'] || '').trim())
+      .filter(n => n.length > 0);
+    this.configureRightByStage(stageId, names);
   }
 
   // 生成底部头像（根据传入的英雄名字数组）

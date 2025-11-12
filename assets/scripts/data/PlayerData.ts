@@ -1,5 +1,6 @@
 import { _decorator, Component, CCInteger, CCString } from 'cc';
 import { HeroRegistry, HeroConfig } from './HeroRegistry';
+import { StageRegistry, StageEnemy } from './StageRegistry';
 
 const { ccclass, property } = _decorator;
 
@@ -22,6 +23,12 @@ export class PlayerData extends Component {
 
   @property({ type: HeroRegistry, tooltip: '英雄配置/资源注册表组件引用' })
   registry: HeroRegistry | null = null;
+
+  @property({ type: StageRegistry, tooltip: '关卡配置/注册表组件引用' })
+  stageRegistry: StageRegistry | null = null;
+
+  @property({ type: CCString, tooltip: '当前进行到的关卡名（示例：1-1）' })
+  currentStageId: string = '1-1';
 
   @property({ type: [HeroLevelEntry], tooltip: '玩家英雄等级（0=未解锁）' })
   heroLevels: HeroLevelEntry[] = [];
@@ -66,5 +73,16 @@ export class PlayerData extends Component {
 
   isHeroUnlocked(name: string): boolean {
     return this.getHeroLevel(name) > 0;
+  }
+
+  // 读取当前关卡的敌人（完整数据/名字列表）
+  getCurrentStageEnemyConfigs(): StageEnemy[] {
+    if (!this.stageRegistry || !this.currentStageId) return [];
+    return this.stageRegistry.getEnemyConfigs(this.currentStageId);
+  }
+
+  getCurrentStageEnemyNames(): string[] {
+    if (!this.stageRegistry || !this.currentStageId) return [];
+    return this.stageRegistry.getEnemyNames(this.currentStageId);
   }
 }

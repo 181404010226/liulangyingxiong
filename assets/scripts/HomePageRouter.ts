@@ -107,7 +107,12 @@ export class HomePageRouter extends Component {
       .filter(e => e && e.level > 0 && e.name && e.name.trim().length > 0)
       .map(e => e.name.trim());
     mgr.setHeroCandidates(candidates);
-    // 敌人留空，不配置右侧
+    // 传入关卡名与敌人数据，配置右侧阵容与顶部关卡标签
+    const stageId = pd.currentStageId;
+    const enemies = pd.getCurrentStageEnemyConfigs();
+    if (stageId) {
+      mgr.setStageAndEnemies(stageId, enemies);
+    }
     // 返回回调：隐藏战斗页面即可
     mgr.onBack = () => {
       this.hidePage(pageId);
