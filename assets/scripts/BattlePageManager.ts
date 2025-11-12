@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Label, Button, Sprite, SpriteFrame, Prefab, instantiate } from 'cc';
+import { _decorator, Component, Node, Label, Button, Sprite, SpriteFrame, Prefab, instantiate, ProgressBar, director } from 'cc';
 import { HeroRegistry } from './data/HeroRegistry';
 import type { StageEnemy } from './data/StageRegistry';
 const { ccclass, property } = _decorator;
@@ -25,6 +25,36 @@ export class BattlePageManager extends Component {
 
   @property({ type: Button })
   startButton!: Button;
+
+  // 3.1 战斗中 UI 控件
+  @property({ type: Label, tooltip: '读秒标签（暂不使用）' })
+  countdownLabel: Label | null = null;
+
+  @property({ type: Button, tooltip: '暂停按钮（点击后显示暂停面板）' })
+  pauseButton: Button | null = null;
+
+  @property({ type: Button, tooltip: '倍速按钮（1/2 切换）' })
+  speedButton: Button | null = null;
+
+  @property({ type: ProgressBar, tooltip: '我方生命值进度条' })
+  leftHpBar: ProgressBar | null = null;
+
+  @property({ type: ProgressBar, tooltip: '敌方生命值进度条' })
+  rightHpBar: ProgressBar | null = null;
+
+  // 暂停面板及其按钮
+  @property({ type: Node, tooltip: '暂停面板根节点' })
+  pausePanel: Node | null = null;
+
+  @property({ type: Button, tooltip: '暂停面板-继续按钮' })
+  pausePanelContinueButton: Button | null = null;
+
+  // 取消单独的“暂停”按钮，改为点击暂停直接进入暂停
+  @property({ type: Button, tooltip: '暂停面板-退出战斗按钮（返回主页面）' })
+  pausePanelExitButton: Button | null = null;
+
+  @property({ type: Button, tooltip: '暂停面板-重新开始战斗按钮' })
+  pausePanelRestartButton: Button | null = null;
 
   // 2.1 战斗前/战斗后根节点（通过 active 切换显示）
   @property({ type: Node, tooltip: '战斗前根节点（进入关卡页面显示）' })
@@ -68,6 +98,11 @@ export class BattlePageManager extends Component {
   private _selectedTags: string[] = [];
   private _avatarNodes: Node[] = [];
   private _enemyConfigs: StageEnemy[] = [];
+
+  // 全局速度与暂停状态
+  private _currentSpeed: number = 1; // 1 或 2
+  private _prePauseSpeed: number = 1; // 进入暂停面板前的速度
+  private _isPaused: boolean = false;
   
   // 首页传入的返回回调；战斗页面点击返回时调用
   onBack: (() => void) | null = null;
@@ -81,6 +116,11 @@ export class BattlePageManager extends Component {
   private bindButtonEvents() {
     this.ensureButtonBinding(this.backButton, this.onClickBack);
     this.ensureButtonBinding(this.startButton, this.onClickStart);
+    this.ensureButtonBinding(this.pauseButton, this.onClickPauseButton);
+    this.ensureButtonBinding(this.speedButton, this.onClickSpeedToggle);
+    this.ensureButtonBinding(this.pausePanelContinueButton, this.onClickPanelContinue);
+    this.ensureButtonBinding(this.pausePanelRestartButton, this.onClickPanelRestart);
+    this.ensureButtonBinding(this.pausePanelExitButton, this.onClickPanelExit);
   }
 
   private ensureButtonBinding(btn: Button | null, handler: (event?: any) => void) {
@@ -185,6 +225,15 @@ export class BattlePageManager extends Component {
     return [...this._selectedTags];
   }
 
+  // 清空玩家选择：去除所有选中遮罩并清空左侧布阵
+  private clearSelection() {
+    this._selectedTags = [];
+    for (const item of this._avatarNodes) {
+      this.setMaskActive(item, false);
+    }
+    this.placeHeroesOnLeftFromSelection();
+  }
+
   // 7. 左侧布阵：按所选头像人数放置
   placeHeroesOnLeftFromSelection() {
     this.placeHeroesOnSide(this.leftPositions, this._selectedTags);
@@ -217,11 +266,19 @@ export class BattlePageManager extends Component {
   private showPreBattle() {
     if (this.preBattleRoot) this.preBattleRoot.active = true;
     if (this.postBattleRoot) this.postBattleRoot.active = false;
+    // 退出战斗态时，关闭暂停面板并重置速度
+    if (this.pausePanel) this.pausePanel.active = false;
+    this._isPaused = false;
+    this._currentSpeed = 1;
+    this.applyGlobalSpeed();
   }
 
   private showPostBattle() {
     if (this.preBattleRoot) this.preBattleRoot.active = false;
     if (this.postBattleRoot) this.postBattleRoot.active = true;
+    // 进入战斗态默认运行当前速度
+    if (this.pausePanel) this.pausePanel.active = false;
+    this.applyGlobalSpeed();
   }
 
   // 将选择的角色以战斗头像预制体放入战斗中 Layout
@@ -248,6 +305,13 @@ export class BattlePageManager extends Component {
 
   // 按钮事件（在面板 Button 的点击事件中绑定即可）
   onClickBack() {
+    // 返回主页面前，统一重置到战斗前状态并清空选择
+    this._isPaused = false;
+    this._currentSpeed = 1;
+    this.applyGlobalSpeed();
+    if (this.pausePanel) this.pausePanel.active = false;
+    this.clearSelection();
+    this.showPreBattle();
     if (this.onBack) this.onBack();
   }
 
@@ -257,6 +321,80 @@ export class BattlePageManager extends Component {
     this.populateBattleAvatars();
     this.showPostBattle();
     // 其他战斗逻辑可在页面内继续处理
+  }
+
+  // —— 战斗中：倍速/暂停/继续/重开 ——
+  private setGlobalSpeed(scale: number) {
+    try {
+      // 统一通过调度器时间缩放控制全局速度
+      director.getScheduler().setTimeScale(scale);
+    } catch (e) {
+      // 兼容环境：若无调度器可用，不抛错以免影响运行
+    }
+  }
+
+  private applyGlobalSpeed() {
+    const scale = this._isPaused ? 0 : this._currentSpeed;
+    this.setGlobalSpeed(scale);
+  }
+
+  onClickPauseButton() {
+    // 打开暂停面板并立即进入暂停
+    if (this.pausePanel) this.pausePanel.active = true;
+    this._prePauseSpeed = this._currentSpeed;
+    this._isPaused = true;
+    this.applyGlobalSpeed();
+  }
+
+  onClickSpeedToggle() {
+    // 在未暂停时切换 1/2；若已暂停，仅记录切换，继续时恢复
+    this._currentSpeed = this._currentSpeed === 1 ? 2 : 1;
+    if (!this._isPaused) this.applyGlobalSpeed();
+  }
+
+  onClickPanelContinue() {
+    // 退出暂停，恢复到进入面板前的速度
+    this._isPaused = false;
+    this._currentSpeed = this._prePauseSpeed;
+    this.applyGlobalSpeed();
+    if (this.pausePanel) this.pausePanel.active = false;
+  }
+
+  onClickPanelRestart() {
+    // 重新开始战斗：回到战斗前界面，速度重置为 1
+    this._isPaused = false;
+    this._currentSpeed = 1;
+    this.applyGlobalSpeed();
+    if (this.pausePanel) this.pausePanel.active = false;
+    // 清空玩家选择
+    this.clearSelection();
+    this.showPreBattle();
+  }
+
+  onClickPanelExit() {
+    // 退出战斗：直接返回主页面（调用 onBack）
+    this._isPaused = false;
+    this._currentSpeed = 1;
+    this.applyGlobalSpeed();
+    if (this.pausePanel) this.pausePanel.active = false;
+    // 清空玩家选择
+    this.clearSelection();
+    // 保证切回战斗前界面
+    this.showPreBattle();
+    if (this.onBack) this.onBack();
+  }
+
+  // —— 生命值进度条更新接口 ——
+  setLeftHp(current: number, max: number) {
+    if (!this.leftHpBar) return;
+    const p = max > 0 ? Math.max(0, Math.min(1, current / max)) : 0;
+    this.leftHpBar.progress = p;
+  }
+
+  setRightHp(current: number, max: number) {
+    if (!this.rightHpBar) return;
+    const p = max > 0 ? Math.max(0, Math.min(1, current / max)) : 0;
+    this.rightHpBar.progress = p;
   }
 }
 
