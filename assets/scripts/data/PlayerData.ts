@@ -11,6 +11,9 @@ export class HeroLevelEntry {
 
   @property({ type: CCInteger, tooltip: '英雄等级（0=未解锁）' })
   level: number = 0;
+
+  @property({ type: CCInteger, tooltip: '英雄进阶等级（默认 0）' })
+  ascendLevel: number = 0;
 }
 
 @ccclass('PlayerData')
@@ -51,6 +54,11 @@ export class PlayerData extends Component {
         level = Math.max(level, 1);
       }
       this.setHeroLevel(name, level);
+      // 若此前未设置进阶等级，保持为默认 0
+      const entry = this.heroLevels.find(e => e.name === name);
+      if (entry && typeof entry.ascendLevel !== 'number') {
+        entry.ascendLevel = 0;
+      }
     });
   }
 
@@ -62,6 +70,20 @@ export class PlayerData extends Component {
       const e = new HeroLevelEntry();
       e.name = name;
       e.level = level;
+      e.ascendLevel = 0;
+      this.heroLevels.push(e);
+    }
+  }
+
+  setHeroAscend(name: string, ascendLevel: number) {
+    const entry = this.heroLevels.find(e => e.name === name);
+    if (entry) {
+      entry.ascendLevel = ascendLevel;
+    } else {
+      const e = new HeroLevelEntry();
+      e.name = name;
+      e.level = 0;
+      e.ascendLevel = ascendLevel;
       this.heroLevels.push(e);
     }
   }
@@ -69,6 +91,11 @@ export class PlayerData extends Component {
   getHeroLevel(name: string): number {
     const entry = this.heroLevels.find(e => e.name === name);
     return entry ? entry.level : 0;
+  }
+
+  getHeroAscend(name: string): number {
+    const entry = this.heroLevels.find(e => e.name === name);
+    return entry ? (entry.ascendLevel ?? 0) : 0;
   }
 
   isHeroUnlocked(name: string): boolean {

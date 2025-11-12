@@ -1,6 +1,8 @@
 import { _decorator, Component, Node, Label, Button, Sprite, SpriteFrame, Prefab, instantiate, ProgressBar, director } from 'cc';
 import { HeroRegistry } from './data/HeroRegistry';
 import type { StageEnemy } from './data/StageRegistry';
+import { HeroController } from './组件/HeroController';
+import type { HeroLevelEntry } from './data/PlayerData';
 const { ccclass, property } = _decorator;
 
 @ccclass('BattlePageManager')
@@ -98,6 +100,9 @@ export class BattlePageManager extends Component {
   private _selectedTags: string[] = [];
   private _avatarNodes: Node[] = [];
   private _enemyConfigs: StageEnemy[] = [];
+  private _leftHeroNodes: Node[] = [];
+  private _rightHeroNodes: Node[] = [];
+  private _allyProgressMap: Map<string, { level: number; ascend: number }> = new Map();
 
   // 全局速度与暂停状态
   private _currentSpeed: number = 1; // 1 或 2
@@ -157,6 +162,19 @@ export class BattlePageManager extends Component {
     this.configureRightByStage(stageId, names);
     // 进入关卡时确保显示战斗前态
     this.showPreBattle();
+  }
+
+  // —— 新增：由首页传入我方角色等级/进阶 ——
+  setAllyProgress(entries: HeroLevelEntry[]) {
+    this._allyProgressMap.clear();
+    const arr = Array.isArray(entries) ? entries : [];
+    for (const e of arr) {
+      const name = (e?.name || '').trim();
+      if (!name) continue;
+      const level = typeof e.level === 'number' ? e.level : 0;
+      const ascend = typeof (e as any).ascendLevel === 'number' ? (e as any).ascendLevel : 0;
+      this._allyProgressMap.set(name, { level, ascend });
+    }
   }
 
   // 生成底部头像（根据传入的英雄名字数组）
@@ -257,6 +275,7 @@ export class BattlePageManager extends Component {
       const prefab = assets?.prefab || null;
       if (slot && prefab) {
         const heroNode = instantiate(prefab);
+        if (name && name.trim().length > 0) heroNode.name = name.trim();
         slot.addChild(heroNode);
       }
     }
@@ -320,6 +339,7 @@ export class BattlePageManager extends Component {
     // 开始战斗：填充战斗头像并切换至战斗后界面
     this.populateBattleAvatars();
     this.showPostBattle();
+    this.attachHeroControllers();
     // 其他战斗逻辑可在页面内继续处理
   }
 
@@ -395,6 +415,71 @@ export class BattlePageManager extends Component {
     if (!this.rightHpBar) return;
     const p = max > 0 ? Math.max(0, Math.min(1, current / max)) : 0;
     this.rightHpBar.progress = p;
+  }
+  
+  // —— 新增：挂载 HeroController 并设置上下文/属性/位移 ——
+  private collectHeroNodesFromSlots(slots: Node[]): Node[] {
+    const res: Node[] = [];
+    for (const s of slots) {
+      for (const c of s.children) res.push(c);
+    }
+    return res;
+  }
+
+  private attachHeroControllers() {
+    // 收集左右角色节点列表
+    this._leftHeroNodes = this.collectHeroNodesFromSlots(this.leftPositions);
+    this._rightHeroNodes = this.collectHeroNodesFromSlots(this.rightPositions);
+
+    const allyNodes = this._leftHeroNodes;
+    const enemyNodes = this._rightHeroNodes;
+
+    // 敌人配置映射（用于等级/进阶）
+    const enemyCfgMap = new Map<string, StageEnemy>();
+    for (const e of this._enemyConfigs) {
+      const n = (e?.['名字'] || '').trim();
+      if (n) enemyCfgMap.set(n, e);
+    }
+
+    // 辅助：从节点名解析英雄配置
+    const getHeroConfig = (node: Node) => {
+      const tag = (node?.name || '').trim();
+      return this.registry ? this.registry.getConfig(tag) : undefined;
+    };
+
+    // 我方：从首页传入的玩家信息读取等级与进阶
+    for (const n of allyNodes) {
+      if (!n) continue;
+      let ctrl = n.getComponent(HeroController);
+      if (!ctrl) ctrl = n.addComponent(HeroController);
+      ctrl.isAlly = true;
+      ctrl.heroName = (n.name || '').trim();
+      ctrl.setContext(allyNodes, enemyNodes);
+      const cfg = getHeroConfig(n);
+      const tag = (n.name || '').trim();
+      const p = this._allyProgressMap.get(tag);
+      const lv = p ? Math.max(1, p.level) : 1;
+      const asc = p ? Math.max(0, p.ascend) : 0;
+      ctrl.initializeFinalAttributes(cfg, lv, asc);
+      ctrl.applyStartOffset();
+    }
+
+    // 敌方：按关卡配置设置等级/进阶
+    for (const n of enemyNodes) {
+      if (!n) continue;
+      let ctrl = n.getComponent(HeroController);
+      if (!ctrl) ctrl = n.addComponent(HeroController);
+      ctrl.isAlly = false;
+      ctrl.heroName = (n.name || '').trim();
+      ctrl.setContext(enemyNodes, allyNodes);
+      const cfg = getHeroConfig(n);
+      const tag = (n.name || '').trim();
+      const ec = enemyCfgMap.get(tag);
+      const lv = ec ? (ec['等级'] || 1) : 1;
+      const asc = ec ? (ec['进阶等级'] || 0) : 0;
+      ctrl.initializeFinalAttributes(cfg, lv, asc);
+      ctrl.applyStartOffset();
+    }
   }
 }
 

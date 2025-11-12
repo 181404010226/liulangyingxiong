@@ -106,6 +106,8 @@ export class HomePageRouter extends Component {
     const candidates = pd.heroLevels
       .filter(e => e && e.level > 0 && e.name && e.name.trim().length > 0)
       .map(e => e.name.trim());
+    // 传入玩家的等级/进阶，用于战斗中计算最终属性
+    mgr.setAllyProgress(pd.heroLevels);
     mgr.setHeroCandidates(candidates);
     // 传入关卡名与敌人数据，配置右侧阵容与顶部关卡标签
     const stageId = pd.currentStageId;
