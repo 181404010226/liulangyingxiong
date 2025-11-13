@@ -1,6 +1,6 @@
 import { sys } from 'cc';
 
-export class BlackShopStorage {
+export class DiamondStorage {
   private static readonly PURCHASED_KEY = 'blackshop:purchasedFlags';
   private static readonly DOUBLE_KEY = 'blackshop:doubleAvailableFlags';
   private static readonly VERSION_KEY = 'blackshop:storageVersion';

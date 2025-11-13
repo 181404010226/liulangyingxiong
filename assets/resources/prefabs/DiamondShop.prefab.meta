@@ -2,12 +2,12 @@
   "ver": "1.1.50",
   "importer": "prefab",
   "imported": true,
-  "uuid": "550bf51e-d495-4de4-ac63-7d897830c44b",
+  "uuid": "81424e3f-4c32-462d-9ec7-29b515a1941a",
   "files": [
     ".json"
   ],
   "subMetas": {},
   "userData": {
-    "syncNodeName": "BlackShop"
+    "syncNodeName": "DiamondShop"
   }
 }

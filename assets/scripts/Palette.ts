@@ -1,8 +1,3 @@
-/*******************************************************************************
- * 创建: 2024年08月28日
- * 作者: 水煮肉片饭(27185709@qq.com)
- * 描述: 调色板，实现Sprite或Label颜色渐变
-*******************************************************************************/
 import { _decorator, UIRenderer, Component, Color, clamp, director, Director, Sprite, Label } from 'cc';
 import { DEV, JSB } from 'cc/env';
 const { ccclass, property, executeInEditMode, requireComponent, menu } = _decorator;
