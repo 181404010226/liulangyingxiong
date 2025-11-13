@@ -1,4 +1,4 @@
-import { _decorator, Component, Vec3, Node, Sprite, SpriteFrame, assetManager, Animation, AnimationClip, animation } from 'cc';
+import { _decorator, Component, Vec3, Node, Sprite, SpriteFrame, assetManager, Animation, AnimationClip, animation, UITransform, ProgressBar, Color } from 'cc';
 import { EDITOR } from 'cc/env';
 const { ccclass, property, executeInEditMode } = _decorator;
 declare const Editor: any;
@@ -45,6 +45,16 @@ export class AutoSpriteFromName extends Component {
 
   @property({ tooltip: '目录名包含“die”时，剪辑使用一次播放（非循环）' })
   nonLoopForDie: boolean = true;
+
+  @property({ tooltip: '阴影图片资源路径（db://assets/images/shadow/Shadow_01.png）' })
+  shadowDbUrl: string = 'db://assets/images/shadow/Shadow_01.png';
+
+  @property({ tooltip: '阴影缩放值（独立于人物贴图缩放）' })
+  shadowScale: number = 0.1;
+
+  // 技能条的 Y 坐标通过私有参数控制
+  private _skillBarY: number = 240;
+  private _hpBarY: number = 250;
 
   private _applied = false;
   private _loading = false;
@@ -165,10 +175,20 @@ export class AutoSpriteFromName extends Component {
       if (this.autoGenerateClips) {
         await this.applyAnimationClips(target);
       }
+
+      // 应用阴影
+      await this.applyShadow();
+
+      // 创建并配置生命条和技能条
+      await this.applyBars();
+
       this._loading = false;
     }
     this.setScale(target);
     this._applied = true;
+
+    // 层级调整：人物贴图在最上层，其次是阴影与血/技能条
+    this.adjustLayerOrder(target);
   }
 
   private ensureAnimation(target: Node): Animation {
@@ -283,6 +303,193 @@ export class AutoSpriteFromName extends Component {
       // 不再尝试写入只读的 tracks getter，避免编辑器抛错
     } catch (e) {
       console.warn('[AutoSpriteFromName] 重建剪辑失败：', clip?.name, e);
+    }
+  }
+
+  private async querySpriteFrameUuidByUrl(dbUrl: string): Promise<string | null> {
+    try {
+      if (!Editor?.Message?.request) return null;
+      const list = await Editor.Message.request('asset-db', 'query-assets', {
+        pattern: 'db://assets/images/shadow/**',
+        ccType: 'cc.SpriteFrame',
+      });
+      if (!Array.isArray(list) || list.length === 0) return null;
+      const candidates = [
+        `${dbUrl}/spriteFrame`,
+        `${dbUrl.replace(/\.png$/i, '')}/spriteFrame`,
+      ];
+      const found = list.find((ai: any) => candidates.includes(String(ai?.url || '')));
+      return found?.uuid || null;
+    } catch (e) {
+      console.warn('[AutoSpriteFromName] 查询阴影 SpriteFrame 失败：', e);
+      return null;
+    }
+  }
+
+  private async applyShadow() {
+    try {
+      let shadow = this.node.getChildByName('阴影');
+      if (!shadow) {
+        shadow = new Node('阴影');
+        shadow.parent = this.node;
+      }
+      const sp = this.ensureSprite(shadow);
+      const uuid = await this.querySpriteFrameUuidByUrl(this.shadowDbUrl);
+      if (uuid) {
+        try {
+          const sf = await this.loadSpriteFrameByUuid(uuid);
+          sp.spriteFrame = sf;
+          if (this.setRawSizeMode) {
+            sp.sizeMode = Sprite.SizeMode.RAW;
+          }
+        } catch (e) {
+          console.warn('[AutoSpriteFromName] 加载阴影 SpriteFrame 失败：', e);
+        }
+      } else {
+        console.warn(`[AutoSpriteFromName] 未找到阴影 SpriteFrame：${this.shadowDbUrl}/spriteFrame`);
+      }
+      // 独立缩放阴影
+      const s = this.shadowScale;
+      const cs = shadow.scale;
+      shadow.setScale(new Vec3(s, s, cs.z));
+    } catch (e) {
+      console.warn('[AutoSpriteFromName] 应用阴影失败：', e);
+    }
+  }
+
+  private async ensureProgressBar(name: string, y: number, colors: { bg: Color; bar: Color }): Promise<Node> {
+    let node = this.node.getChildByName(name);
+    if (!node) {
+      node = new Node(name);
+      node.parent = this.node;
+    }
+    const ui = node.getComponent(UITransform) || node.addComponent(UITransform);
+    ui.setAnchorPoint(0.5, 0.5);
+    // 默认长度 100，高度 5
+    // @ts-ignore
+    ui.width = ui.width || 100;
+    // @ts-ignore
+    ui.height = 5;
+    node.setPosition(0, y, node.position.z);
+
+    // 背景
+    let bg = node.getChildByName('Background');
+    if (!bg) {
+      bg = new Node('Background');
+      bg.parent = node;
+    }
+    const bgUi = bg.getComponent(UITransform) || bg.addComponent(UITransform);
+    bgUi.setAnchorPoint(0.5, 0.5);
+    // @ts-ignore
+    bgUi.width = ui.width;
+    // @ts-ignore
+    bgUi.height = 5;
+    const bgSprite = bg.getComponent(Sprite) || bg.addComponent(Sprite);
+
+    // Bar
+    let bar = node.getChildByName('Bar');
+    if (!bar) {
+      bar = new Node('Bar');
+      bar.parent = node;
+    }
+    const barUi = bar.getComponent(UITransform) || bar.addComponent(UITransform);
+    barUi.setAnchorPoint(0.5, 0.5);
+    // @ts-ignore
+    barUi.width = ui.width;
+    // @ts-ignore
+    barUi.height = 5;
+    const barSprite = bar.getComponent(Sprite) || bar.addComponent(Sprite);
+
+    bar.setPosition(0, 0, bar.position.z);
+    bg.setPosition(0, 0, bg.position.z);
+
+    // 加载一个默认的 SpriteFrame 并应用单色
+    try {
+      const defUuid = await this.getDefaultSpriteFrameUuid();
+      if (defUuid) {
+        const defSf = await this.loadSpriteFrameByUuid(defUuid);
+        bgSprite.spriteFrame = defSf;
+        barSprite.spriteFrame = defSf;
+      }
+    } catch (e) {
+      console.warn('[AutoSpriteFromName] 加载默认 SpriteFrame 失败：', e);
+    }
+
+    // 颜色（单色）设置（在组件有效时应用，避免编辑器断言）
+    try {
+      // @ts-ignore
+      if ((bgSprite as any).isValid) {
+        bgSprite.color = colors.bg;
+      }
+      // @ts-ignore
+      if ((barSprite as any).isValid) {
+        barSprite.color = colors.bar;
+      }
+    } catch (e) {
+      console.warn('[AutoSpriteFromName] 设置进度条颜色失败：', e);
+    }
+
+    // 作为水平填充条（需存在有效的 SpriteFrame）
+    if (barSprite.spriteFrame) {
+      barSprite.fillStart = 0;
+      barSprite.fillRange = 1;
+    }
+
+    const pb = node.getComponent(ProgressBar) || node.addComponent(ProgressBar);
+    pb.barSprite = barSprite;
+    pb.mode = ProgressBar.Mode.HORIZONTAL;
+    pb.reverse = false;
+    return node;
+  }
+
+  private async applyBars() {
+    // 生命条在上，技能条在下；高度统一 5，使用单色
+    await this.ensureProgressBar('生命条', this._hpBarY, {
+      bg: new Color(60, 60, 60, 255),
+      bar: new Color(150, 255, 0, 255),
+    });
+    await this.ensureProgressBar('技能条', this._skillBarY, {
+      bg: new Color(60, 60, 60, 255),
+      bar: new Color(255, 214, 0, 255),
+    });
+  }
+
+  private adjustLayerOrder(spriteNode: Node) {
+    try {
+      // 目标顺序：阴影 -> 生命条 -> 技能条 -> 人物贴图（最上层）
+      const shadow = this.node.getChildByName('阴影');
+      const hp = this.node.getChildByName('生命条');
+      const sp = this.node.getChildByName('技能条');
+
+      const ordered: (Node | null)[] = [shadow, hp, sp, spriteNode];
+      let idx = 0;
+      for (const n of ordered) {
+        if (n) {
+          n.setSiblingIndex(idx);
+          idx++;
+        }
+      }
+    } catch (e) {
+      console.warn('[AutoSpriteFromName] 层级调整失败：', e);
+    }
+  }
+
+  private async getDefaultSpriteFrameUuid(): Promise<string | null> {
+    try {
+      if (!Editor?.Message?.request) return null;
+      const list = await Editor.Message.request('asset-db', 'query-assets', {
+        pattern: 'db://internal/**',
+        ccType: 'cc.SpriteFrame',
+      });
+      if (!Array.isArray(list) || list.length === 0) return null;
+      const found = list.find((ai: any) => {
+        const u = String(ai?.url || '').toLowerCase();
+        return u.endsWith('/default_sprite/spriteFrame'.toLowerCase()) || u.includes('default_sprite');
+      });
+      return found?.uuid || null;
+    } catch (e) {
+      console.warn('[AutoSpriteFromName] 查询默认 SpriteFrame 失败：', e);
+      return null;
     }
   }
 }
