@@ -499,7 +499,7 @@ export class HeroController extends Component {
         this._anim.play(deathName);
         const st = this._anim.getState(deathName);
         if (st) st.speed = this.globalTimeScale;
-        dur = clip.duration || dur;
+        dur = clip.duration / this.globalTimeScale || dur;
       } catch {}
     }
     // 锁定动作，避免其他行为穿插
