@@ -539,7 +539,7 @@ export class HeroController extends Component {
   }
 
   private _syncHeadBars() {
-    // 同步填充范围（0~1），需要 Sprite.Type.FILLED + HORIZONTAL
+    // 同步填充范围（0~1）
     const hpPercent = this.maxHp > 0 ? Math.max(0, Math.min(1, this.currentHp / this.maxHp)) : 0;
     const sgPercent = Math.max(0, Math.min(1, this.skillGauge / 100));
     try {
