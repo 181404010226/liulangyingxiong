@@ -126,6 +126,16 @@
             <option value="ssr">ssr</option>
           </select>
         </div>
+        <div class="row" id="equipSlotRow" style="display:none;">
+          <label for="equipSlot">装备部位</label>
+          <select id="equipSlot" style="width:100%; background:#0c1116; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 10px;">
+            <option value="" selected>选择部位</option>
+            <option value="手部">手部</option>
+            <option value="衣服">衣服</option>
+            <option value="腰带">腰带</option>
+            <option value="腿部">腿部</option>
+          </select>
+        </div>
         <div class="attrs">
           <div class="attr-panel" id="basicPanel">
             <h3>基础属性</h3>
@@ -323,6 +333,7 @@
       const posPriority = getNumber('posPriority');
       const career = document.getElementById('career')?.value || '';
       const rarity = document.getElementById('rarity')?.value || '';
+      const equipSlot = document.getElementById('equipSlot')?.value || '';
       const basic = {};
       BASIC_ATTRS.forEach(n => basic[n] = getNumber(`attr-${n}`));
       const combat = {};
@@ -353,6 +364,9 @@
         },
         '升阶配置': getAscendJSON()
       };
+      if (type === '装备') {
+        json['装备部位'] = equipSlot;
+      }
       return json;
     }
 
@@ -374,12 +388,16 @@
       try {
         const typeEl = document.getElementById('configType');
         if (typeEl) typeEl.value = data['类型'] ?? '英雄';
+        // 根据类型显示/隐藏装备部位
+        updateEquipSlotVisibility();
         document.getElementById('heroName').value = data['名字'] ?? '';
         setNumber('posPriority', data['站位优先级'] ?? '');
         const careerEl = document.getElementById('career');
         if (careerEl) careerEl.value = data['职业'] ?? '';
         const rarityEl = document.getElementById('rarity');
         if (rarityEl) rarityEl.value = data['初始品阶'] ?? '';
+        const equipEl = document.getElementById('equipSlot');
+        if (equipEl) equipEl.value = data['装备部位'] ?? '';
         const basic = data['基础属性'] || {};
         BASIC_ATTRS.forEach(n => setNumber(`attr-${n}`, basic[n] ?? ''));
         const combat = data['战斗属性'] || {};
@@ -461,6 +479,10 @@
     function resetForm() {
       document.getElementById('heroName').value = '';
       document.getElementById('configType').value = '英雄';
+      // 装备部位复位并隐藏
+      const equipEl = document.getElementById('equipSlot');
+      if (equipEl) equipEl.value = '';
+      updateEquipSlotVisibility();
       setNumber('posPriority', '');
       const careerEl = document.getElementById('career');
       if (careerEl) careerEl.value = '';
@@ -564,6 +586,14 @@
       document.getElementById('previewOutput').textContent = lines.join('\n');
     }
 
+    // 根据配置类型显示/隐藏装备部位下拉框
+    function updateEquipSlotVisibility() {
+      const type = document.getElementById('configType')?.value;
+      const row = document.getElementById('equipSlotRow');
+      if (!row) return;
+      row.style.display = (type === '装备') ? '' : 'none';
+    }
+
     // 初始化
     buildAttrInputs('basicAttrs', BASIC_ATTRS);
     buildAttrInputs('combatAttrs', COMBAT_ATTRS);
@@ -577,11 +607,14 @@
     document.getElementById('btnReset').addEventListener('click', resetForm);
     document.getElementById('btnCopy').addEventListener('click', copyExportText);
     document.getElementById('previewLevel').addEventListener('input', updatePreview);
-    document.getElementById('configType').addEventListener('change', updatePreview);
+    document.getElementById('configType').addEventListener('change', () => { updateEquipSlotVisibility(); updatePreview(); });
+    const equipSlotEl = document.getElementById('equipSlot');
+    if (equipSlotEl) equipSlotEl.addEventListener('change', updatePreview);
     // 各输入变化时也更新预览
     [...document.querySelectorAll('input')].forEach(el => el.addEventListener('input', updatePreview));
     // 下拉选择变化时也更新预览
     [...document.querySelectorAll('select')].forEach(el => el.addEventListener('change', updatePreview));
+    updateEquipSlotVisibility();
     updatePreview();
   </script>
 </body>
