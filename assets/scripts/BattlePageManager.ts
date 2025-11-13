@@ -257,16 +257,16 @@ export class BattlePageManager extends Component {
 
   // 7. 左侧布阵：按所选头像人数放置
   placeHeroesOnLeftFromSelection() {
-    this.placeHeroesOnSide(this.leftPositions, this._selectedTags);
+    this.placeHeroesOnSide(this.leftPositions, this._selectedTags, false);
   }
 
   // 8. 右侧按关卡配置
   configureRightByStage(stageId: string, enemyTags: string[]) {
     // stageId 预留用于业务侧记录/查询
-    this.placeHeroesOnSide(this.rightPositions, enemyTags);
+    this.placeHeroesOnSide(this.rightPositions, enemyTags, true);
   }
 
-  private placeHeroesOnSide(slots: Node[], names: string[]) {
+  private placeHeroesOnSide(slots: Node[], names: string[], isEnemy: boolean = false) {
     const count = Math.min(slots.length, names.length);
     // 清空所有槽位
     for (const s of slots) s.removeAllChildren();
@@ -280,6 +280,11 @@ export class BattlePageManager extends Component {
         const heroNode = instantiate(prefab);
         if (name && name.trim().length > 0) heroNode.name = name.trim();
         slot.addChild(heroNode);
+        // 敌方水平翻转（scaleX 取反，保留原始 Y/Z）
+        if (isEnemy) {
+          const sc = heroNode.scale;
+          heroNode.setScale(-Math.abs(sc.x), sc.y, sc.z);
+        }
       }
     }
   }

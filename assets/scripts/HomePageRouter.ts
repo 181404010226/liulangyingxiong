@@ -37,6 +37,8 @@ export class HomePageRouter extends Component {
 
   start() {
     this.setupButtons();
+    this.instantiateAllPagesHidden();
+    this.updateClickBlockerState();
   }
 
   openPage(_: Event, pageId: string) {
@@ -99,6 +101,27 @@ export class HomePageRouter extends Component {
     // 若是黑市页面，绑定回调（含返回与购买获得钻石）
     this.setupBlackShopIfAny(n, pageId);
     return n;
+  }
+
+  /**
+   * 启动时预实例化所有页面并设为隐藏，点击时仅切换显示状态。
+   */
+  private instantiateAllPagesHidden() {
+    const parent = this.pageRoot ?? this.node;
+    for (const entry of this.pages) {
+      const id = (entry?.id || '').trim();
+      const pf = entry?.prefab;
+      if (!id || !pf) continue;
+      if (this._instances[id]) continue; // 避免重复实例化
+      const n = instantiate(pf);
+      // 先设为隐藏，避免未打开时触发组件生命周期逻辑
+      n.active = false;
+      parent.addChild(n);
+      this._instances[id] = n;
+      // 为特定页面绑定初始化逻辑（战斗页/黑市）
+      this.setupBattlePageIfAny(n, id);
+      this.setupBlackShopIfAny(n, id);
+    }
   }
 
   /**
