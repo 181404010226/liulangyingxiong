@@ -57,6 +57,12 @@ export class HeroController extends Component {
   @property({ tooltip: '当前目标名称（空为无目标）' })
   public editorCurrentTarget: string = '';
 
+  @property({ tooltip: '当前生命值（预览）' })
+  public editorCurrentHp: number = 0;
+
+  @property({ tooltip: '是否已死亡（预览）' })
+  public editorIsDead: boolean = false;
+
   // 提取常用字段的数值缓存
   private _attackRange = 0; // px
   private _moveSpeed = 0;   // px/s
@@ -76,6 +82,7 @@ export class HeroController extends Component {
   // —— 生命与头像绑定 ——
   public maxHp: number = 0;
   public currentHp: number = 0;
+  public isDead: boolean = false;
   private _avatarNode: Node | null = null;
   private _hpBar: ProgressBar | null = null;
   private _skillBar: ProgressBar | null = null;
@@ -183,6 +190,11 @@ export class HeroController extends Component {
   update(dt: number) {
     // 每帧同步头像进度条（生命/技能）
     this._syncAvatarBars();
+    // 死亡后不再参与移动/攻击/寻敌
+    if (this.isDead) {
+      this.editorIsDead = true;
+      return;
+    }
     if (this.globalTimeScale <= 0) {
       this._applyAnimationSpeed(0);
       return;
@@ -258,6 +270,9 @@ export class HeroController extends Component {
     let bestDist = Number.POSITIVE_INFINITY;
     for (const n of this.enemies) {
       if (!n || !n.isValid) continue;
+      // 跳过已死亡目标
+      const c = n.getComponent(HeroController);
+      if (c && c.isDead) continue;
       const d = this.distanceTo(n);
       if (d < bestDist) {
         best = n;
@@ -414,6 +429,8 @@ export class HeroController extends Component {
     const sgPercent = Math.max(0, Math.min(1, this.skillGauge / 100));
     if (this._skillBar) this._skillBar.progress = sgPercent;
     this.editorSkillGauge = this.skillGauge;
+    this.editorCurrentHp = this.currentHp;
+    this.editorIsDead = this.isDead;
   }
 
   private _findNodeByName(root: Node, name: string): Node | null {
@@ -429,11 +446,41 @@ export class HeroController extends Component {
 
   // —— 承伤接口 ——
   public takeDamage(amount: number, from?: Node, type?: DamageType) {
+    if (this.isDead) return;
     const v = Math.max(0, Number(amount) || 0);
     if (v <= 0) return;
     this.currentHp = Math.max(0, this.currentHp - v);
-    // 可在此扩展死亡处理，例如播放死亡动画/移除节点
+    if (this.currentHp <= 0) {
+      this.currentHp = 0;
+      this.isDead = true;
+      this._syncAvatarBars();
+      this._playDeathAndRemove();
+      return;
+    }
     this._syncAvatarBars();
+  }
+
+  private _playDeathAndRemove() {
+    // 播放死亡动画（若存在），播放完后移除节点
+    let dur = 0.6; // 默认时长
+    const deathName = this._findClipNameCaseInsensitive('die') || this._findClipNameCaseInsensitive('death');
+    const clip = deathName ? this._findClipByName(deathName) : null;
+    if (this._anim && deathName && clip) {
+      try {
+        this._anim.play(deathName);
+        const st = this._anim.getState(deathName);
+        if (st) st.speed = this.globalTimeScale;
+        dur = clip.duration || dur;
+      } catch {}
+    }
+    // 锁定动作，避免其他行为穿插
+    this._actionLock = dur;
+    // 动画结束后移除与销毁
+    this.scheduleOnce(() => {
+      if (!this.node || !this.node.isValid) return;
+      this.node.removeFromParent();
+      this.node.destroy();
+    }, dur);
   }
 }
 
