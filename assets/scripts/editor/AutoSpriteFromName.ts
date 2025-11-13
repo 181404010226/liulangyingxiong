@@ -49,8 +49,7 @@ export class AutoSpriteFromName extends Component {
   @property({ tooltip: '阴影图片资源路径（db://assets/images/shadow/Shadow_01.png）' })
   shadowDbUrl: string = 'db://assets/images/shadow/Shadow_01.png';
 
-  @property({ tooltip: '阴影缩放值（独立于人物贴图缩放）' })
-  shadowScale: number = 0.1;
+  private shadowScale: number = 0.3;
 
   // 技能条的 Y 坐标通过私有参数控制
   private _skillBarY: number = 240;
@@ -365,9 +364,9 @@ export class AutoSpriteFromName extends Component {
     }
     const ui = node.getComponent(UITransform) || node.addComponent(UITransform);
     ui.setAnchorPoint(0.5, 0.5);
-    // 默认长度 100，高度 5
+    // 固定长度 100，高度 5，避免超出
     // @ts-ignore
-    ui.width = ui.width || 100;
+    ui.width = 100;
     // @ts-ignore
     ui.height = 5;
     node.setPosition(0, y, node.position.z);
@@ -381,7 +380,7 @@ export class AutoSpriteFromName extends Component {
     const bgUi = bg.getComponent(UITransform) || bg.addComponent(UITransform);
     bgUi.setAnchorPoint(0.5, 0.5);
     // @ts-ignore
-    bgUi.width = ui.width;
+    bgUi.width = 100;
     // @ts-ignore
     bgUi.height = 5;
     const bgSprite = bg.getComponent(Sprite) || bg.addComponent(Sprite);
@@ -395,7 +394,7 @@ export class AutoSpriteFromName extends Component {
     const barUi = bar.getComponent(UITransform) || bar.addComponent(UITransform);
     barUi.setAnchorPoint(0.5, 0.5);
     // @ts-ignore
-    barUi.width = ui.width;
+    barUi.width = 100;
     // @ts-ignore
     barUi.height = 5;
     const barSprite = bar.getComponent(Sprite) || bar.addComponent(Sprite);
@@ -408,6 +407,9 @@ export class AutoSpriteFromName extends Component {
       const defUuid = await this.getDefaultSpriteFrameUuid();
       if (defUuid) {
         const defSf = await this.loadSpriteFrameByUuid(defUuid);
+        // 将图片模式改为 CUSTOM，避免按原始尺寸溢出
+        bgSprite.sizeMode = Sprite.SizeMode.CUSTOM;
+        barSprite.sizeMode = Sprite.SizeMode.CUSTOM;
         bgSprite.spriteFrame = defSf;
         barSprite.spriteFrame = defSf;
       }
