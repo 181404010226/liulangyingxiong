@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Vec3, Animation, AnimationClip } from 'cc';
+import { _decorator, Component, Node, Vec3, Animation, AnimationClip, ProgressBar } from 'cc';
 import type { HeroConfig, HeroAscend } from '../data/HeroRegistry';
 const { ccclass, property } = _decorator;
 
@@ -69,6 +69,13 @@ export class HeroController extends Component {
   public skillGauge: number = 0; // 0~100
   private _attackCdRemain = 0;   // 攻击冷却剩余（秒）
   public globalTimeScale: number = 1;
+  
+  // —— 生命与头像绑定 ——
+  public maxHp: number = 0;
+  public currentHp: number = 0;
+  private _avatarNode: Node | null = null;
+  private _hpBar: ProgressBar | null = null;
+  private _skillBar: ProgressBar | null = null;
 
   setGlobalTimeScale(scale: number) {
     const s = Math.max(0, Number(scale) || 0);
@@ -153,6 +160,9 @@ export class HeroController extends Component {
     this.editorAttackRange = this._attackRange;
     this.editorMoveSpeed = this._moveSpeed;
     this.editorAttackSpeed = this._attackSpeed;
+    // 初始化生命
+    this.maxHp = numberOrZero(basic['生命值']);
+    this.currentHp = this.maxHp;
   }
 
   // 战斗开始时位移：左侧向左 200px，右侧向右 200px
@@ -163,6 +173,8 @@ export class HeroController extends Component {
   }
 
   update(dt: number) {
+    // 每帧同步头像进度条（生命/技能）
+    this._syncAvatarBars();
     if (this.globalTimeScale <= 0) {
       this._applyAnimationSpeed(0);
       return;
@@ -222,6 +234,8 @@ export class HeroController extends Component {
         this.skillGauge = Math.min(100, this.skillGauge + 10);
       }
     }
+    // 攻击/技能逻辑结束后，确保刷新技能条显示
+    this._syncAvatarBars();
   }
 
   // —— 移动与距离 ——
@@ -286,12 +300,12 @@ export class HeroController extends Component {
 
   private playAttack(): boolean {
     if (!this._anim) return false;
-    return this._playCandidates(['attack', 'kill']);
+    return this._playCandidates(['attack', 'hit']);
   }
 
   private playSkill(): boolean {
     if (!this._anim) return false;
-    return this._playCandidates(['skill', 'hit']);
+    return this._playCandidates(['skill', 'kill']);
   }
 
   private _isPlayingOneOf(names: string[]): boolean {
@@ -362,6 +376,38 @@ export class HeroController extends Component {
       const cur = q.shift()!;
       const a = cur.getComponent(Animation);
       if (a) return a;
+      for (const c of cur.children) q.push(c);
+    }
+    return null;
+  }
+
+  // —— 头像绑定与进度条同步 ——
+  public bindBattleAvatar(avatarRoot: Node | null) {
+    this._avatarNode = avatarRoot || null;
+    this._hpBar = null;
+    this._skillBar = null;
+    if (!avatarRoot) return;
+    const hpNode = this._findNodeByName(avatarRoot, '生命条');
+    const skillNode = this._findNodeByName(avatarRoot, '技能条');
+   this._hpBar = hpNode ? (hpNode.getComponent(ProgressBar) || null) : null;
+    this._skillBar = skillNode ? (skillNode.getComponent(ProgressBar) || null) : null;
+    this._syncAvatarBars();
+  }
+
+  private _syncAvatarBars() {
+    const hpPercent = this.maxHp > 0 ? Math.max(0, Math.min(1, this.currentHp / this.maxHp)) : 0;
+    if (this._hpBar) this._hpBar.progress = hpPercent;
+    const sgPercent = Math.max(0, Math.min(1, this.skillGauge / 100));
+    if (this._skillBar) this._skillBar.progress = sgPercent;
+    this.editorSkillGauge = this.skillGauge;
+  }
+
+  private _findNodeByName(root: Node, name: string): Node | null {
+    if (!root) return null;
+    const q: Node[] = [root];
+    while (q.length > 0) {
+      const cur = q.shift()!;
+      if (cur.name === name) return cur;
       for (const c of cur.children) q.push(c);
     }
     return null;

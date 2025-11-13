@@ -100,6 +100,7 @@ export class BattlePageManager extends Component {
   private _selectedTags: string[] = [];
   private _avatarNodes: Node[] = [];
   private _enemyConfigs: StageEnemy[] = [];
+  private _currentStageId: string = '';
   private _leftHeroNodes: Node[] = [];
   private _rightHeroNodes: Node[] = [];
   private _allyProgressMap: Map<string, { level: number; ascend: number }> = new Map();
@@ -155,6 +156,7 @@ export class BattlePageManager extends Component {
   // 传入关卡信息与敌人数据，设置标题并布置右侧敌人阵容
   setStageAndEnemies(stageId: string, enemies: StageEnemy[]) {
     this._enemyConfigs = Array.isArray(enemies) ? enemies : [];
+    this._currentStageId = stageId;
     const label = stageId && stageId.trim().length > 0 ? `${stageId}` : '';
     this.setStageProgress(label);
     const names = this._enemyConfigs
@@ -320,6 +322,8 @@ export class BattlePageManager extends Component {
     const assets = this.registry ? this.registry.resolveAssetsByName(name) : undefined;
     const sf = assets?.avatar || null;
     if (sp && sf) sp.spriteFrame = sf;
+    // 为头像命名为英雄名，便于后续绑定
+    if (name && name.trim().length > 0) item.name = name.trim();
     return item;
   }
 
@@ -379,19 +383,14 @@ export class BattlePageManager extends Component {
     // 清空玩家选择
     this.clearSelection();
     this.showPreBattle();
+    // 重新生成关卡敌人，确保敌人上的 HeroController 被重置
+    const names = this._enemyConfigs.map(e => (e?.['名字'] || '').trim()).filter(n => n.length > 0);
+    this.configureRightByStage(this._currentStageId, names);
   }
 
   onClickPanelExit() {
-    // 退出战斗：直接返回主页面（调用 onBack）
-    this._isPaused = false;
-    this._currentSpeed = 1;
-    this.applyGlobalSpeed();
-    if (this.pausePanel) this.pausePanel.active = false;
-    // 清空玩家选择
-    this.clearSelection();
-    // 保证切回战斗前界面
-    this.showPreBattle();
-    if (this.onBack) this.onBack();
+    // 退出战斗：复用返回主页面逻辑
+    this.onClickBack();
   }
 
   // —— 生命值进度条更新接口 ——
@@ -425,6 +424,15 @@ export class BattlePageManager extends Component {
     const allyNodes = this._leftHeroNodes;
     const enemyNodes = this._rightHeroNodes;
 
+    // 构建战斗头像映射（名字 -> 头像节点）
+    const avatarMap = new Map<string, Node>();
+    if (this.battleLayout) {
+      for (const c of this.battleLayout.children) {
+        const key = (c?.name || '').trim();
+        if (key) avatarMap.set(key, c);
+      }
+    }
+
     // 敌人配置映射（用于等级/进阶）
     const enemyCfgMap = new Map<string, StageEnemy>();
     for (const e of this._enemyConfigs) {
@@ -454,6 +462,9 @@ export class BattlePageManager extends Component {
       ctrl.initializeFinalAttributes(cfg, lv, asc);
       ctrl.applyStartOffset();
       ctrl.setGlobalTimeScale(this._isPaused ? 0 : this._currentSpeed);
+      // 绑定对应战斗头像
+      const av = avatarMap.get(tag);
+      if (av) ctrl.bindBattleAvatar(av);
       this._controllers.push(ctrl);
     }
 
@@ -473,6 +484,7 @@ export class BattlePageManager extends Component {
       ctrl.initializeFinalAttributes(cfg, lv, asc);
       ctrl.applyStartOffset();
       ctrl.setGlobalTimeScale(this._isPaused ? 0 : this._currentSpeed);
+      // 敌方当前不绑定战斗头像（无敌方头像布局）；如需可在此扩展
       this._controllers.push(ctrl);
     }
   }
