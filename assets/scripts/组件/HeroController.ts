@@ -11,6 +11,9 @@ const { ccclass, property } = _decorator;
  */
 @ccclass('HeroController')
 export class HeroController extends Component {
+  // —— 伤害回调 ——
+  public onDealDamage: ((source: Node, target: Node, type: DamageType) => void) | null = null;
+
   // —— 上下文（由 BattlePageManager 设置） ——
   @property({ tooltip: '是否为我方' })
   isAlly: boolean = true;
@@ -76,6 +79,11 @@ export class HeroController extends Component {
   private _avatarNode: Node | null = null;
   private _hpBar: ProgressBar | null = null;
   private _skillBar: ProgressBar | null = null;
+
+  // 外部注入：设置造成伤害时的回调（交给伤害管理器处理）
+  setDamageHandler(cb: ((source: Node, target: Node, type: DamageType) => void) | null) {
+    this.onDealDamage = cb || null;
+  }
 
   setGlobalTimeScale(scale: number) {
     const s = Math.max(0, Number(scale) || 0);
@@ -222,6 +230,9 @@ export class HeroController extends Component {
       // 释放技能，优先级高于普攻
       if (this.playSkill()) {
         this.skillGauge = 0;
+        if (this._currentTarget && this.onDealDamage) {
+          this.onDealDamage(this.node, this._currentTarget, '技能');
+        }
         return;
       }
     }
@@ -232,6 +243,9 @@ export class HeroController extends Component {
         // 攻击后进入冷却；技能条+10
         this._attackCdRemain = 1 / this._attackSpeed;
         this.skillGauge = Math.min(100, this.skillGauge + 10);
+        if (this._currentTarget && this.onDealDamage) {
+          this.onDealDamage(this.node, this._currentTarget, '普攻');
+        }
       }
     }
     // 攻击/技能逻辑结束后，确保刷新技能条显示
@@ -412,6 +426,15 @@ export class HeroController extends Component {
     }
     return null;
   }
+
+  // —— 承伤接口 ——
+  public takeDamage(amount: number, from?: Node, type?: DamageType) {
+    const v = Math.max(0, Number(amount) || 0);
+    if (v <= 0) return;
+    this.currentHp = Math.max(0, this.currentHp - v);
+    // 可在此扩展死亡处理，例如播放死亡动画/移除节点
+    this._syncAvatarBars();
+  }
 }
 
 // —— 工具方法 ——
@@ -443,3 +466,6 @@ function safeStringify(obj: any): string {
 }
 
 export default HeroController;
+
+// —— 类型 ——
+export type DamageType = '普攻' | '技能';

@@ -2,6 +2,7 @@ import { _decorator, Component, Node, Label, Button, Sprite, SpriteFrame, Prefab
 import { HeroRegistry } from './data/HeroRegistry';
 import type { StageEnemy } from './data/StageRegistry';
 import { HeroController } from './组件/HeroController';
+import { DamageManager } from './组件/DamageManager';
 import type { HeroLevelEntry } from './data/PlayerData';
 const { ccclass, property } = _decorator;
 
@@ -105,6 +106,7 @@ export class BattlePageManager extends Component {
   private _rightHeroNodes: Node[] = [];
   private _allyProgressMap: Map<string, { level: number; ascend: number }> = new Map();
   private _controllers: HeroController[] = [];
+  private _damageManager: DamageManager | null = null;
 
   // 全局速度与暂停状态
   private _currentSpeed: number = 1; // 1 或 2
@@ -118,6 +120,8 @@ export class BattlePageManager extends Component {
     this.bindButtonEvents();
     // 默认进入页面展示战斗前、隐藏战斗后
     this.showPreBattle();
+    // 初始化伤害管理器
+    this._damageManager = new DamageManager();
   }
 
   private bindButtonEvents() {
@@ -470,6 +474,12 @@ export class BattlePageManager extends Component {
       // 绑定对应战斗头像
       const av = avatarMap.get(tag);
       if (av) ctrl.bindBattleAvatar(av);
+      // 注入伤害回调
+      if (this._damageManager) {
+        ctrl.setDamageHandler((src, tgt, type) => {
+          this._damageManager!.applyDamage(src, tgt, type);
+        });
+      }
       this._controllers.push(ctrl);
     }
 
@@ -490,6 +500,12 @@ export class BattlePageManager extends Component {
       ctrl.applyStartOffset();
       ctrl.setGlobalTimeScale(this._isPaused ? 0 : this._currentSpeed);
       // 敌方当前不绑定战斗头像（无敌方头像布局）；如需可在此扩展
+      // 注入伤害回调
+      if (this._damageManager) {
+        ctrl.setDamageHandler((src, tgt, type) => {
+          this._damageManager!.applyDamage(src, tgt, type);
+        });
+      }
       this._controllers.push(ctrl);
     }
   }
