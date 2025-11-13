@@ -390,9 +390,9 @@ export class AutoSpriteFromName extends Component {
     }
     const ui = node.getComponent(UITransform) || node.addComponent(UITransform);
     ui.setAnchorPoint(0.5, 0.5);
-    // 固定长度 100，高度 5，避免超出
+    // 固定长度 50，高度 5，避免超出
     // @ts-ignore
-    ui.width = 100;
+    ui.width = 50;
     // @ts-ignore
     ui.height = 5;
     node.setPosition(0, y, node.position.z);
@@ -405,10 +405,11 @@ export class AutoSpriteFromName extends Component {
     }
     const bgUi = bg.getComponent(UITransform) || bg.addComponent(UITransform);
     bgUi.setAnchorPoint(0.5, 0.5);
+    // 复用父 UITransform 的宽高
     // @ts-ignore
-    bgUi.width = 100;
+    bgUi.width = ui.width;
     // @ts-ignore
-    bgUi.height = 5;
+    bgUi.height = ui.height;
     const bgSprite = bg.getComponent(Sprite) || bg.addComponent(Sprite);
 
     // Bar
@@ -419,10 +420,11 @@ export class AutoSpriteFromName extends Component {
     }
     const barUi = bar.getComponent(UITransform) || bar.addComponent(UITransform);
     barUi.setAnchorPoint(0.5, 0.5);
+    // 复用父 UITransform 的宽高
     // @ts-ignore
-    barUi.width = 100;
+    barUi.width = ui.width;
     // @ts-ignore
-    barUi.height = 5;
+    barUi.height = ui.height;
     const barSprite = bar.getComponent(Sprite) || bar.addComponent(Sprite);
 
     bar.setPosition(0, 0, bar.position.z);

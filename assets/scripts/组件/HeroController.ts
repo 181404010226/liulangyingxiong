@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Vec3, Animation, AnimationClip, ProgressBar } from 'cc';
+import { _decorator, Component, Node, Vec3, Animation, AnimationClip, ProgressBar, Sprite } from 'cc';
 import type { HeroConfig, HeroAscend } from '../data/HeroRegistry';
 const { ccclass, property } = _decorator;
 
@@ -86,6 +86,14 @@ export class HeroController extends Component {
   private _avatarNode: Node | null = null;
   private _hpBar: ProgressBar | null = null;
   private _skillBar: ProgressBar | null = null;
+  private _hpBarNode: Node | null = null;
+  private _skillBarNode: Node | null = null;
+  private _showBarsRemain: number = 0;
+  // —— 头顶条（自身节点） ——
+  private _headHpNode: Node | null = null;
+  private _headSkillNode: Node | null = null;
+  private _headHpBarSprite: Sprite | null = null;
+  private _headSkillBarSprite: Sprite | null = null;
 
   // 外部注入：设置造成伤害时的回调（交给伤害管理器处理）
   setDamageHandler(cb: ((source: Node, target: Node, type: DamageType) => void) | null) {
@@ -100,6 +108,8 @@ export class HeroController extends Component {
 
   onLoad() {
     this._anim = this.findAnimation(this.node);
+    // 绑定头顶生命/技能条（位于自身节点）
+    this._bindHeadBarsFromSelf();
   }
 
   // 供管理器调用：设置队友/敌人上下文
@@ -190,6 +200,11 @@ export class HeroController extends Component {
   update(dt: number) {
     // 每帧同步头像进度条（生命/技能）
     this._syncAvatarBars();
+    // 计时显示血条/技能条
+    if (this._showBarsRemain > 0) {
+      this._showBarsRemain -= this.globalTimeScale > 0 ? dt * this.globalTimeScale : 0;
+      if (this._showBarsRemain <= 0) this._showBarsRemain = 0;
+    }
     // 死亡后不再参与移动/攻击/寻敌
     if (this.isDead) {
       this.editorIsDead = true;
@@ -415,11 +430,17 @@ export class HeroController extends Component {
     this._avatarNode = avatarRoot || null;
     this._hpBar = null;
     this._skillBar = null;
+    this._hpBarNode = null;
+    this._skillBarNode = null;
     if (!avatarRoot) return;
     const hpNode = this._findNodeByName(avatarRoot, '生命条');
     const skillNode = this._findNodeByName(avatarRoot, '技能条');
-   this._hpBar = hpNode ? (hpNode.getComponent(ProgressBar) || null) : null;
+    this._hpBarNode = hpNode || null;
+    this._skillBarNode = skillNode || null;
+    this._hpBar = hpNode ? (hpNode.getComponent(ProgressBar) || null) : null;
     this._skillBar = skillNode ? (skillNode.getComponent(ProgressBar) || null) : null;
+    // 默认隐藏，受伤时临时显示
+    this._setAvatarBarsVisible(false);
     this._syncAvatarBars();
   }
 
@@ -431,6 +452,12 @@ export class HeroController extends Component {
     this.editorSkillGauge = this.skillGauge;
     this.editorCurrentHp = this.currentHp;
     this.editorIsDead = this.isDead;
+    // 受伤后显示3秒，其余时间隐藏
+    const shouldShow = this._showBarsRemain > 0 && !this.isDead;
+    this._setAvatarBarsVisible(shouldShow);
+    this._setHeadBarsVisible(shouldShow);
+    // 同步头顶条的进度显示
+    this._syncHeadBars();
   }
 
   private _findNodeByName(root: Node, name: string): Node | null {
@@ -450,6 +477,8 @@ export class HeroController extends Component {
     const v = Math.max(0, Number(amount) || 0);
     if (v <= 0) return;
     this.currentHp = Math.max(0, this.currentHp - v);
+    // 受伤后显示血条与技能条3秒
+    this._showBarsRemain = 3;
     if (this.currentHp <= 0) {
       this.currentHp = 0;
       this.isDead = true;
@@ -481,6 +510,48 @@ export class HeroController extends Component {
       this.node.removeFromParent();
       this.node.destroy();
     }, dur);
+  }
+
+  private _setAvatarBarsVisible(visible: boolean) {
+    if (this._hpBarNode) this._hpBarNode.active = !!visible;
+    if (this._skillBarNode) this._skillBarNode.active = !!visible;
+  }
+
+  private _bindHeadBarsFromSelf() {
+    const hpNode = this._findNodeByName(this.node, '生命条');
+    const skillNode = this._findNodeByName(this.node, '技能条');
+    this._headHpNode = hpNode || null;
+    this._headSkillNode = skillNode || null;
+    // 进度条的 Bar 精灵（用于水平填充）
+    const hpBar = hpNode ? this._findNodeByName(hpNode, 'Bar') : null;
+    const skillBar = skillNode ? this._findNodeByName(skillNode, 'Bar') : null;
+    this._headHpBarSprite = hpBar ? (hpBar.getComponent(Sprite) || null) : null;
+    this._headSkillBarSprite = skillBar ? (skillBar.getComponent(Sprite) || null) : null;
+    // 默认隐藏
+    this._setHeadBarsVisible(false);
+    // 初始同步显示数值
+    this._syncHeadBars();
+  }
+
+  private _setHeadBarsVisible(visible: boolean) {
+    if (this._headHpNode) this._headHpNode.active = !!visible;
+    if (this._headSkillNode) this._headSkillNode.active = !!visible;
+  }
+
+  private _syncHeadBars() {
+    // 同步填充范围（0~1），需要 Sprite.Type.FILLED + HORIZONTAL
+    const hpPercent = this.maxHp > 0 ? Math.max(0, Math.min(1, this.currentHp / this.maxHp)) : 0;
+    const sgPercent = Math.max(0, Math.min(1, this.skillGauge / 100));
+    try {
+      if (this._headHpBarSprite) {
+        this._headHpBarSprite.fillStart = 0;
+        this._headHpBarSprite.fillRange = hpPercent;
+      }
+      if (this._headSkillBarSprite) {
+        this._headSkillBarSprite.fillStart = 0;
+        this._headSkillBarSprite.fillRange = sgPercent;
+      }
+    } catch {}
   }
 }
 
