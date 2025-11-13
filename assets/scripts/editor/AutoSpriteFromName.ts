@@ -1,4 +1,5 @@
 import { _decorator, Component, Vec3, Node, Sprite, SpriteFrame, assetManager, Animation, AnimationClip, animation, UITransform, ProgressBar, Color } from 'cc';
+import { DynamicShadowScaler } from '../组件/DynamicShadowScaler';
 import { EDITOR } from 'cc/env';
 const { ccclass, property, executeInEditMode } = _decorator;
 declare const Editor: any;
@@ -49,11 +50,11 @@ export class AutoSpriteFromName extends Component {
   @property({ tooltip: '阴影图片资源路径（db://assets/images/shadow/Shadow_01.png）' })
   shadowDbUrl: string = 'db://assets/images/shadow/Shadow_01.png';
 
-  private shadowScale: number = 0.3;
+  private shadowScale: number = 0.2;
 
   // 技能条的 Y 坐标通过私有参数控制
-  private _skillBarY: number = 240;
-  private _hpBarY: number = 250;
+  private _skillBarY: number = 160;
+  private _hpBarY: number = 170;
 
   private _applied = false;
   private _loading = false;
@@ -178,6 +179,9 @@ export class AutoSpriteFromName extends Component {
       // 应用阴影
       await this.applyShadow();
 
+      // 在编辑器模式下，自动挂载阴影动态缩放脚本
+      this.ensureDynamicShadowScaler();
+
       // 创建并配置生命条和技能条
       await this.applyBars();
 
@@ -258,9 +262,29 @@ export class AutoSpriteFromName extends Component {
 
       // 应用到 Animation 组件
       anim.clips = existingClips;
-      if (!anim.defaultClip && existingClips.length > 0) {
-        anim.defaultClip = existingClips[0];
+      anim.playOnLoad = true;
+      // 优先选择 idle/daiji 作为默认剪辑
+      const idleClip = existingClips.find(c => {
+        const n = String(c?.name || '').toLowerCase();
+        return n === 'idle' || n === 'daiji';
+      });
+      if (!anim.defaultClip) {
+        anim.defaultClip = idleClip || (existingClips.length > 0 ? existingClips[0] : null as any);
       }
+      // 如果当前没有任何播放状态，则主动播放默认剪辑（编辑器/运行时都生效）
+      try {
+        const animAny: any = anim as any;
+        let anyPlaying = false;
+        const getStates = animAny?.getStates;
+        if (typeof getStates === 'function') {
+          const states: any[] = getStates.call(animAny) || [];
+          anyPlaying = states.some(s => s && (s.isPlaying === true || s.playing === true));
+        }
+        if (!anyPlaying) {
+          const name = String((anim.defaultClip as any)?.name || (idleClip as any)?.name || (existingClips[0] as any)?.name || '');
+          if (name) anim.play(name);
+        }
+      } catch { /* 忽略播放失败 */ }
     } catch (e) {
       console.warn('[AutoSpriteFromName] 自动生成动画剪辑失败：', e);
     }
@@ -351,6 +375,8 @@ export class AutoSpriteFromName extends Component {
       const s = this.shadowScale;
       const cs = shadow.scale;
       shadow.setScale(new Vec3(s, s, cs.z));
+      // 设置阴影位置为 (0, 35, 0)
+      shadow.setPosition(0, 35, 0);
     } catch (e) {
       console.warn('[AutoSpriteFromName] 应用阴影失败：', e);
     }
@@ -446,14 +472,22 @@ export class AutoSpriteFromName extends Component {
 
   private async applyBars() {
     // 生命条在上，技能条在下；高度统一 5，使用单色
-    await this.ensureProgressBar('生命条', this._hpBarY, {
+    const hpBarNode = await this.ensureProgressBar('生命条', this._hpBarY, {
       bg: new Color(60, 60, 60, 255),
       bar: new Color(150, 255, 0, 255),
     });
-    await this.ensureProgressBar('技能条', this._skillBarY, {
+    const skillBarNode = await this.ensureProgressBar('技能条', this._skillBarY, {
       bg: new Color(60, 60, 60, 255),
       bar: new Color(255, 214, 0, 255),
     });
+
+    // 默认隐藏生命条与技能条，供运行时脚本或逻辑按需显示
+    try {
+      if (hpBarNode) hpBarNode.active = false;
+      if (skillBarNode) skillBarNode.active = false;
+    } catch (e) {
+      console.warn('[AutoSpriteFromName] 隐藏进度条失败：', e);
+    }
   }
 
   private adjustLayerOrder(spriteNode: Node) {
@@ -492,6 +526,21 @@ export class AutoSpriteFromName extends Component {
     } catch (e) {
       console.warn('[AutoSpriteFromName] 查询默认 SpriteFrame 失败：', e);
       return null;
+    }
+  }
+
+  private ensureDynamicShadowScaler() {
+    try {
+      let comp = this.node.getComponent(DynamicShadowScaler);
+      if (!comp) {
+        comp = this.node.addComponent(DynamicShadowScaler);
+      }
+      // 将人物贴图子节点名与阴影节点名同步给组件
+      comp.actorChildName = this.targetChildName;
+      comp.shadowNodeName = '阴影';
+      comp.baseScale = this.shadowScale;
+    } catch (e) {
+      console.warn('[AutoSpriteFromName] 挂载阴影动态缩放组件失败：', e);
     }
   }
 }

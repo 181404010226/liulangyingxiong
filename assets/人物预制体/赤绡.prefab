@@ -38,10 +38,13 @@
       },
       {
         "__id__": 54
+      },
+      {
+        "__id__": 56
       }
     ],
     "_prefab": {
-      "__id__": 56
+      "__id__": 58
     },
     "_lpos": {
       "__type__": "cc.Vec3",
@@ -96,7 +99,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "x": 0,
-      "y": 0,
+      "y": 35,
       "z": 0
     },
     "_lrot": {
@@ -108,8 +111,8 @@
     },
     "_lscale": {
       "__type__": "cc.Vec3",
-      "x": 0.3,
-      "y": 0.3,
+      "x": 0.2,
+      "y": 0.2,
       "z": 1
     },
     "_mobility": 0,
@@ -224,7 +227,7 @@
         "__id__": 15
       }
     ],
-    "_active": true,
+    "_active": false,
     "_components": [
       {
         "__id__": 21
@@ -239,7 +242,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "x": 0,
-      "y": 250,
+      "y": 170,
       "z": 0
     },
     "_lrot": {
@@ -496,9 +499,9 @@
     "_dstBlendFactor": 4,
     "_color": {
       "__type__": "cc.Color",
-      "r": 0,
+      "r": 150,
       "g": 255,
-      "b": 10,
+      "b": 0,
       "a": 255
     },
     "_spriteFrame": {
@@ -619,7 +622,7 @@
         "__id__": 33
       }
     ],
-    "_active": true,
+    "_active": false,
     "_components": [
       {
         "__id__": 39
@@ -634,7 +637,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "x": 0,
-      "y": 240,
+      "y": 160,
       "z": 0
     },
     "_lrot": {
@@ -1065,8 +1068,8 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 505,
-      "height": 725
+      "width": 1280,
+      "height": 704
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -1102,7 +1105,7 @@
       "a": 255
     },
     "_spriteFrame": {
-      "__uuid__": "a45bf028-d3f2-4dc7-90e3-86e5227db505@f9941",
+      "__uuid__": "4d914992-9a4e-4711-9ade-55ac3f2730c1@f9941",
       "__expectedType__": "cc.SpriteFrame"
     },
     "_type": 0,
@@ -1136,7 +1139,7 @@
     "__prefab": {
       "__id__": 50
     },
-    "playOnLoad": false,
+    "playOnLoad": true,
     "_clips": [
       {
         "__uuid__": "7b06441b-ea04-48cd-b4dc-55c711bb6710",
@@ -1234,12 +1237,32 @@
     "animationSample": 12,
     "nonLoopForDie": true,
     "shadowDbUrl": "db://assets/images/shadow/Shadow_01.png",
-    "shadowScale": 0.3,
     "_id": ""
   },
   {
     "__type__": "cc.CompPrefabInfo",
     "fileId": "0erLNS4qtHV5wL/I87LmhO"
+  },
+  {
+    "__type__": "724fddAXQhOKKKHzrIRW3ev",
+    "_name": "",
+    "_objFlags": 0,
+    "__editorExtras__": {},
+    "node": {
+      "__id__": 1
+    },
+    "_enabled": true,
+    "__prefab": {
+      "__id__": 57
+    },
+    "actorChildName": "人物贴图",
+    "shadowNodeName": "阴影",
+    "baseScale": 0.2,
+    "_id": ""
+  },
+  {
+    "__type__": "cc.CompPrefabInfo",
+    "fileId": "dfvsylwJhOOJ1R1HuA2q7Z"
   },
   {
     "__type__": "cc.PrefabInfo",
