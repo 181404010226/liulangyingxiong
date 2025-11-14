@@ -354,6 +354,7 @@ export class BattlePageManager extends Component {
     this.populateBattleAvatars();
     this.showPostBattle();
     this.attachHeroControllers();
+    this.updateTeamHpBars();
     // 其他战斗逻辑可在页面内继续处理
   }
 
@@ -477,7 +478,8 @@ export class BattlePageManager extends Component {
       // 注入伤害回调
       if (this._damageManager) {
         ctrl.setDamageHandler((src, tgt, type) => {
-          this._damageManager!.applyDamage(src, tgt, type);
+          const _ = this._damageManager!.applyDamage(src, tgt, type);
+          this.updateTeamHpBars();
         });
       }
       this._controllers.push(ctrl);
@@ -503,11 +505,13 @@ export class BattlePageManager extends Component {
       // 注入伤害回调
       if (this._damageManager) {
         ctrl.setDamageHandler((src, tgt, type) => {
-          this._damageManager!.applyDamage(src, tgt, type);
+          const _ = this._damageManager!.applyDamage(src, tgt, type);
+          this.updateTeamHpBars();
         });
       }
       this._controllers.push(ctrl);
     }
+    this.updateTeamHpBars();
   }
 
   private applyPauseStateToControllers() {
@@ -515,6 +519,27 @@ export class BattlePageManager extends Component {
     for (const c of this._controllers) {
       if (c && c.node && c.node.isValid) c.setGlobalTimeScale(s);
     }
+  }
+
+  private calcTeamHpPercentFromNodes(nodes: Node[]): number {
+    const list = (nodes || []).filter(n => n && n.isValid);
+    const count = nodes.length;
+    if (count === 0) return 0;
+    let sum = 0;
+    for (const n of list) {
+      const c = n.getComponent(HeroController);
+      if (!c) continue;
+      const p = c.maxHp > 0 ? Math.max(0, Math.min(1, c.currentHp / c.maxHp)) : 0;
+      sum += p;
+    }
+    return Math.max(0, Math.min(1, sum / count));
+  }
+
+  private updateTeamHpBars() {
+    const lp = this.calcTeamHpPercentFromNodes(this._leftHeroNodes);
+    const rp = this.calcTeamHpPercentFromNodes(this._rightHeroNodes);
+    if (this.leftHpBar) this.leftHpBar.progress = lp;
+    if (this.rightHpBar) this.rightHpBar.progress = rp;
   }
 }
 

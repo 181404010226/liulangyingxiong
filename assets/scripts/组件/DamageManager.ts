@@ -8,11 +8,11 @@ import { HeroController, DamageType } from './HeroController';
  * - 调用目标 HeroController 的 takeDamage 执行伤害
  */
 export class DamageManager {
-  applyDamage(source: Node, target: Node, type: DamageType): void {
-    if (!source || !target) return;
+  applyDamage(source: Node, target: Node, type: DamageType): number {
+    if (!source || !target) return 0;
     const attacker = source.getComponent(HeroController);
     const defender = target.getComponent(HeroController);
-    if (!attacker || !defender) return;
+    if (!attacker || !defender) return 0;
 
     const atk = readAttr(attacker.finalBasic, attacker.finalCombat, '攻击力', 0);
     // 优先读取“防御”，否则退化为“护甲”作为物理防御
@@ -33,6 +33,8 @@ export class DamageManager {
 
     const dmg = Math.floor(base);
     if (dmg > 0) defender.takeDamage(dmg, source, type);
+    const percent = defender.maxHp > 0 ? Math.max(0, Math.min(1, defender.currentHp / defender.maxHp)) : 0;
+    return percent;
   }
 }
 
