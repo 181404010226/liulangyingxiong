@@ -54,11 +54,12 @@ function parseIntOr(text: string, fallback: number): number {
 
 function formatHMS(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds));
-  const hh = Math.floor(s / 3600);
+  const dd = Math.floor(s / 86400);
+  const hh = Math.floor((s % 86400) / 3600);
   const mm = Math.floor((s % 3600) / 60);
   const ss = s % 60;
   const pad = (v: number) => (v < 10 ? `0${v}` : `${v}`);
-  return `${pad(hh)}:${pad(mm)}:${pad(ss)}`;
+  return dd > 0 ? `${dd}天${pad(hh)}:${pad(mm)}:${pad(ss)}` : `${pad(hh)}:${pad(mm)}:${pad(ss)}`;
 }
 
 @ccclass('BlackShopPanel')
@@ -247,15 +248,26 @@ export class BlackShopPanel extends Component {
   }
 
   // =============== 刷新时间显示 ===============
+  private computeNext5amEpochMs(fromMs?: number): number {
+    const nowMs = typeof fromMs === 'number' ? fromMs : Date.now();
+    const d = new Date(nowMs);
+    const next = new Date(d);
+    next.setHours(5, 0, 0, 0);
+    if (next.getTime() <= nowMs) {
+      next.setDate(next.getDate() + 1);
+      next.setHours(5, 0, 0, 0);
+    }
+    return next.getTime();
+  }
+
   private async initRefreshTimer(): Promise<void> {
     try {
       if (this.api?.getNextRefreshEpochMs) {
         const ts = await Promise.resolve(this.api.getNextRefreshEpochMs());
-        this.nextRefreshEpochMs = Number.isFinite(ts as number)
-          ? (ts as number)
-          : Date.now() + this.defaultRefreshPeriodSeconds * 1000;
+        const validTs = Number.isFinite(ts as number) ? (ts as number) : 0;
+        this.nextRefreshEpochMs = validTs > Date.now() ? validTs : this.computeNext5amEpochMs();
       } else {
-        this.nextRefreshEpochMs = Date.now() + this.defaultRefreshPeriodSeconds * 1000;
+        this.nextRefreshEpochMs = this.computeNext5amEpochMs();
       }
     } catch {
       this.nextRefreshEpochMs = Date.now() + this.defaultRefreshPeriodSeconds * 1000;
@@ -268,9 +280,9 @@ export class BlackShopPanel extends Component {
   private tickRefreshTime = (): void => {
     const remainMs = this.nextRefreshEpochMs - Date.now();
     if (remainMs <= 0) {
-      // 到点自动刷新一轮，重置下一个周期
+      // 到点自动刷新一轮，重置到下一次凌晨 5 点
       this.refreshSections();
-      this.nextRefreshEpochMs = Date.now() + this.defaultRefreshPeriodSeconds * 1000;
+      this.nextRefreshEpochMs = this.computeNext5amEpochMs();
     }
     this.updateRefreshTimeLabel();
   };
@@ -355,6 +367,9 @@ export class BlackShopPanel extends Component {
     this.refreshCount++;
     this.refreshSections();
     this.updateRefreshCostLabel();
+    // 手动刷新后，同步将下一次自动刷新时间设为下一次凌晨 5 点
+    this.nextRefreshEpochMs = this.computeNext5amEpochMs();
+    this.updateRefreshTimeLabel();
     // 内部扣减已完成，并已通过回调告知外部；不再主动拉取外部数值
   }
 
