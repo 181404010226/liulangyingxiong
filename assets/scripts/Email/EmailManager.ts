@@ -1,6 +1,9 @@
 import { director, find, Node, sys } from 'cc';
+import { EmailController } from './EmailController';
 
 export type OnBackToMainHandler = (currentLevel: number) => void;
+export type AddCoinsHandler = (amount: number) => void;
+export type AddDiamondsHandler = (amount: number) => void;
 
 export interface EmailItem {
   id: string;
@@ -9,6 +12,8 @@ export interface EmailItem {
   createdAt: number;
   claimed: boolean;
   level?: number;
+  coinAmount?: number;
+  diamondAmount?: number;
 }
 
 const STORAGE_KEYS = {
@@ -19,6 +24,8 @@ const STORAGE_KEYS = {
 
 let onBackToMainHandler: OnBackToMainHandler | null = null;
 let currentLevelProvider: (() => number) | null = null;
+let addCoinsHandler: AddCoinsHandler | null = null;
+let addDiamondsHandler: AddDiamondsHandler | null = null;
 
 /**
  * 设置外部传入的参数与方法（回调、关卡提供者等）
@@ -26,6 +33,8 @@ let currentLevelProvider: (() => number) | null = null;
 export function setupEmailModule(options?: {
   onBackToMain?: OnBackToMainHandler;
   currentLevel?: number | (() => number);
+  addCoins?: AddCoinsHandler;
+  addDiamonds?: AddDiamondsHandler;
 }): void {
   if (options?.onBackToMain) {
     onBackToMainHandler = options.onBackToMain;
@@ -35,6 +44,12 @@ export function setupEmailModule(options?: {
     currentLevelProvider = () => fixedLevel;
   } else if (typeof options?.currentLevel === 'function') {
     currentLevelProvider = options.currentLevel as () => number;
+  }
+  if (options?.addCoins) {
+    addCoinsHandler = options.addCoins;
+  }
+  if (options?.addDiamonds) {
+    addDiamondsHandler = options.addDiamonds;
   }
 }
 
@@ -58,7 +73,7 @@ function saveEmails(list: EmailItem[]): void {
   }
 }
 
-function addEmail(title: string, body: string, level?: number): void {
+function addEmail(title: string, body: string, level?: number, coinAmount: number = 0, diamondAmount: number = 0): void {
   const list = loadEmails();
   const email: EmailItem = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -67,6 +82,8 @@ function addEmail(title: string, body: string, level?: number): void {
     createdAt: Date.now(),
     claimed: false,
     level,
+    coinAmount,
+    diamondAmount,
   };
   list.push(email);
   saveEmails(list);
@@ -74,7 +91,8 @@ function addEmail(title: string, body: string, level?: number): void {
 
 function triggerWelcome(currentLevel: number): void {
   if (!sys.localStorage.getItem(STORAGE_KEYS.welcomeSent)) {
-    addEmail('欢迎来到流浪英雄', '祝你冒险顺利！', currentLevel);
+    // 默认欢迎奖励：金币100，钻石3（可按需调整）
+    addEmail('欢迎来到流浪英雄', '祝你冒险顺利！', currentLevel, 100, 3);
     sys.localStorage.setItem(STORAGE_KEYS.welcomeSent, '1');
   }
 }
@@ -82,7 +100,8 @@ function triggerWelcome(currentLevel: number): void {
 function triggerChapter1Complete(currentLevel: number): void {
   // 当完成第一章（示例：关卡>=1）时发送邮件
   if (currentLevel >= 1 && !sys.localStorage.getItem(STORAGE_KEYS.chapter1Sent)) {
-    addEmail('第一章完成奖励', '恭喜通关第一章，领取你的奖励！', currentLevel);
+    // 默认第一章奖励：金币200，钻石2（可按需调整）
+    addEmail('第一章完成奖励', '恭喜通关第一章，领取你的奖励！', currentLevel, 200, 2);
     sys.localStorage.setItem(STORAGE_KEYS.chapter1Sent, '1');
   }
 }
@@ -140,6 +159,60 @@ export function markEmailClaimed(id: string): boolean {
   return false;
 }
 
+function grantRewards(coin: number = 0, diamond: number = 0): void {
+  try {
+    if (coin && addCoinsHandler) {
+      addCoinsHandler(coin);
+    }
+    if (diamond && addDiamondsHandler) {
+      addDiamondsHandler(diamond);
+    }
+  } catch (e) {
+    console.warn('[Email] grantRewards handler error:', e);
+  }
+}
+
+/**
+ * 按ID领取单封邮件：持久化并调用奖励回调
+ */
+export function claimEmail(id: string): boolean {
+  const list = loadEmails();
+  const idx = list.findIndex((e) => e.id === id);
+  if (idx < 0) return false;
+  const item = list[idx];
+  if (item.claimed) return false;
+  item.claimed = true;
+  saveEmails(list);
+  const coin = item.coinAmount ?? 0;
+  const diamond = item.diamondAmount ?? 0;
+  grantRewards(coin, diamond);
+  return true;
+}
+
+/**
+ * 领取全部未领取邮件：逐封调用奖励回调并持久化
+ */
+export function claimAllUnclaimed(): { claimedCount: number; totalCoins: number; totalDiamonds: number } {
+  const list = loadEmails();
+  let claimedCount = 0;
+  let totalCoins = 0;
+  let totalDiamonds = 0;
+  for (let i = 0; i < list.length; i++) {
+    const item = list[i];
+    if (!item.claimed) {
+      item.claimed = true;
+      const c = item.coinAmount ?? 0;
+      const d = item.diamondAmount ?? 0;
+      totalCoins += c;
+      totalDiamonds += d;
+      grantRewards(c, d);
+      claimedCount++;
+    }
+  }
+  saveEmails(list);
+  return { claimedCount, totalCoins, totalDiamonds };
+}
+
 /**
  * 打开并初始化邮件场景：在场景加载后为 Canvas/Email 绑定控制器
  */
@@ -151,21 +224,19 @@ export function openEmailScene(): void {
       console.warn('[Email] Canvas/Email node not found.');
       return;
     }
-    // 运行时新增控制器组件，避免编辑器手动挂载
+    // 已静态挂载：仅获取并初始化控制器，避免重复挂载
     try {
-      // 动态引入以避免循环依赖
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const Controller = require('./EmailController');
-      const CompClass = Controller?.EmailController;
-      if (CompClass) {
-        const comp = emailNode.addComponent(CompClass) as InstanceType<typeof CompClass>;
-        comp.initialize({
-          getCurrentLevel: currentLevelProvider ?? (() => level),
-          onBack: (lv: number) => onBackToMain(lv),
-        });
+      const comp = emailNode.getComponent(EmailController);
+      if (!comp) {
+        console.warn('[Email] EmailController not found on Canvas/Email. 请确认已在编辑器静态挂载');
+        return;
       }
+      comp.initialize({
+        getCurrentLevel: currentLevelProvider ?? (() => level),
+        onBack: (lv: number) => onBackToMain(lv),
+      });
     } catch (e) {
-      console.warn('[Email] addComponent EmailController failed:', e);
+      console.warn('[Email] initialize EmailController failed:', e);
     }
   });
 }

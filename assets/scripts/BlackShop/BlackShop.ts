@@ -1,15 +1,15 @@
 import { _decorator, Component, Node, Label, Button, UITransform } from 'cc';
 const { ccclass, property } = _decorator;
 
-// 物品类型定义
+// 物品类型定义（碎片类型改为外部传入）
 export enum BlackShopItemType {
   AdvancedStone = 'advancedStone',
   ChallengeTicket = 'challengeTicket',
   RecruitTicket = 'recruitTicket',
-  RFragment = 'rFragment',
-  SRFragment = 'srFragment',
-  SSRFragment = 'ssrFragment',
 }
+
+// 支持外部自定义的动态物品类型（例如 r/sr/ssr 碎片）
+export type ShopItemType = BlackShopItemType | string;
 
 // 对外接口：由游戏外部传入资源读写与发奖逻辑
 export interface BlackShopExternalAPI {
@@ -17,7 +17,7 @@ export interface BlackShopExternalAPI {
   getCoin: () => number | Promise<number>;
   spendDiamond: (amount: number) => boolean | Promise<boolean>;
   spendCoin: (amount: number) => boolean | Promise<boolean>;
-  grantItem: (type: BlackShopItemType, quantity: number) => void | Promise<void>;
+  grantItem: (type: ShopItemType, quantity: number) => void | Promise<void>;
   // 可选：下一次自动刷新时间（毫秒时间戳）
   getNextRefreshEpochMs?: () => number | Promise<number>;
 }
@@ -33,7 +33,7 @@ type DiscountRate = 0.75 | 0.5 | null;
 
 interface SectionUI {
   sectionIndex: number; // 1..6
-  itemType: BlackShopItemType;
+  itemType: ShopItemType;
   quantity: number; // 固定数量
   saleNode: Node | null;
   saleLabel: Label | null;
@@ -82,6 +82,11 @@ export class BlackShopPanel extends Component {
 
   private sections: SectionUI[] = [];
   private callbacks: BlackShopCallbacks = {};
+
+  // 外部传入的碎片类型列表（依次对应 r、sr、ssr），若未提供则使用占位字符串
+  private fragmentTypeList: string[] = [];
+  // 外部传入的每个格子的数量（长度为 6），未提供则走默认
+  private externalSectionQuantities: number[] = [];
 
   // ================= 标题与货币显示（通过装饰器注入） =================
   @property(Node)
@@ -156,6 +161,18 @@ export class BlackShopPanel extends Component {
     this.callbacks = { ...this.callbacks, ...callbacks };
   }
 
+  // 外部设置 r/sr/ssr 的物品类型（字符串即可，例如 'rFragment'）
+  public setFragmentTypes(types: string[]): void {
+    this.fragmentTypeList = Array.isArray(types) ? types.slice(0, 3) : [];
+    this.buildSectionsFromProps();
+  }
+
+  // 外部设置六个格子的物品数量（长度建议为 6）
+  public setSectionQuantities(quantities: number[]): void {
+    this.externalSectionQuantities = Array.isArray(quantities) ? quantities.slice(0, 6) : [];
+    this.buildSectionsFromProps();
+  }
+
   // 购买接口：外部可调用，或你可在按钮事件里调用
   public async buySection(index1to6: number): Promise<boolean> {
     const sec = this.sections.find(s => s.sectionIndex === index1to6);
@@ -171,15 +188,27 @@ export class BlackShopPanel extends Component {
 
   // =============== UI/节点收集 ===============
   private buildSectionsFromProps(): void {
-    const types: BlackShopItemType[] = [
+    const baseTypes: ShopItemType[] = [
       BlackShopItemType.AdvancedStone,
       BlackShopItemType.ChallengeTicket,
       BlackShopItemType.RecruitTicket,
-      BlackShopItemType.RFragment,
-      BlackShopItemType.SRFragment,
-      BlackShopItemType.SSRFragment,
     ];
-    const quantities = [20, 10, 5, 10, 8, 5];
+    // 若外部传入不足 3 项，使用占位字符串补齐；完全未传则使用默认占位
+    const fragmentTypes: ShopItemType[] =
+      this.fragmentTypeList.length >= 3
+        ? this.fragmentTypeList.slice(0, 3)
+        : this.fragmentTypeList.length > 0
+          ? [
+              ...this.fragmentTypeList,
+              ...Array(Math.max(0, 3 - this.fragmentTypeList.length)).fill('fragment'),
+            ]
+          : ['rFragment', 'srFragment', 'ssrFragment'];
+    const types: ShopItemType[] = [...baseTypes, ...fragmentTypes];
+
+    const quantities =
+      this.externalSectionQuantities.length === 6
+        ? this.externalSectionQuantities.slice(0, 6)
+        : [20, 10, 5, 10, 8, 5];
 
     this.sections = [];
     for (let i = 0; i < 6; i++) {
