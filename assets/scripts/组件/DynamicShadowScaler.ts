@@ -15,8 +15,7 @@ export class DynamicShadowScaler extends Component {
   @property({ tooltip: '阴影子节点名称（默认：阴影）' })
   shadowNodeName: string = '阴影';
 
-  @property({ tooltip: '阴影基准缩放（不设置则取阴影当前缩放）' })
-  baseScale: number = 0.15;
+  baseScale: number;
 
   private _shadowNode: Node | null = null;
   private _anim: Animation | null = null;

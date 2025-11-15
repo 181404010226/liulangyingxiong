@@ -14,8 +14,8 @@ declare const Editor: any;
 @executeInEditMode
 export class AutoSpriteFromName extends Component {
 
-  @property({ tooltip: '目标缩放值（统一缩放 x=y=scale）' })
-  scale: number = 0.1;
+  // @property({ tooltip: '目标缩放值（统一缩放 x=y=scale）' })
+  private scale: number = 0.45;
 
   @property({ tooltip: '是否在每次编辑器刷新都强制重新匹配' })
   forceRefresh: boolean = false;
@@ -50,7 +50,8 @@ export class AutoSpriteFromName extends Component {
   @property({ tooltip: '阴影图片资源路径（db://assets/images/shadow/Shadow_01.png）' })
   shadowDbUrl: string = 'db://assets/images/shadow/Shadow_01.png';
 
-  private shadowScale: number = 0.2;
+  private shadowScale: number = 0.3;
+  private shadowPos: Vec3 = new Vec3(0, 50, 0);
 
   // 技能条的 Y 坐标通过私有参数控制
   private _skillBarY: number = 160;
@@ -375,8 +376,8 @@ export class AutoSpriteFromName extends Component {
       const s = this.shadowScale;
       const cs = shadow.scale;
       shadow.setScale(new Vec3(s, s, cs.z));
-      // 设置阴影位置为 (0, 35, 0)
-      shadow.setPosition(0, 35, 0);
+      // 设置阴影位置
+      shadow.setPosition(this.shadowPos);
     } catch (e) {
       console.warn('[AutoSpriteFromName] 应用阴影失败：', e);
     }
